@@ -307,11 +307,13 @@ Example of values in the column: Dagfinn Sverre Aarskog
 
 ]
 
+lm_config = cognify.LMConfig(model="gpt-4o-mini", kwargs={"temperature": 0.0})
 exec = cognify.Model(agent_name='column_filtering',
              system_prompt=system_prompt,
              input_variables=[cognify.Input(name=input) for input in inputs],
              output=cognify.OutputLabel(name='is_column_information_relevant', 
-                                custom_output_format_instructions="Please response with Yes or No (no other text should be included)."))
+                                custom_output_format_instructions="Please response with Yes or No (no other text should be included)."),
+            lm_config=lm_config)
 # exec.add_demos(demos)
 raw_runnable_exec = cognify.as_runnable(exec) | StrOutputParser()
 

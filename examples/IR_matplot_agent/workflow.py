@@ -6,8 +6,9 @@ import dspy
 
 from tqdm import tqdm
 from agents.query_expansion_agent.agent import QueryExpansionAgent, query_expansion_agent
-from agents.plot_agent.agent import PlotAgent, PlotAgentModule
+from agents.plot_agent.agent import PlotAgent, PlotAgentModule, initial_coder_agent, plot_debugger_agent, refine_plot_agent
 from agents.visual_refine_agent import VisualRefineAgent
+from agents.visual_refine_agent.agent import visual_refinement_agent
 import logging
 import os
 import shutil
@@ -16,7 +17,7 @@ import sys
 from agents.utils import is_run_code_success, run_code, get_code
 from agents.dspy_common import OpenAIModel
 from agents.config.openai import openai_kwargs
-from cognify.optimizer import register_workflow, register_evaluator
+import cognify
 import dotenv
 
 # set to info level logging
@@ -24,15 +25,8 @@ logging.basicConfig(level=logging.INFO)
 
 dotenv.load_dotenv()
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--model_type', type=str, default='gpt-4o-mini')
-parser.add_argument('--visual_refine', type=bool, default=True)
-args = parser.parse_args()
-
-@register_workflow
-def mainworkflow(input: dict):
-    query, directory_path, example_id, input_path = input['query'], input['directory_path'], input['example_id'], input['input_path']
+@cognify.register_workflow
+def mainworkflow(query, directory_path, example_id, input_path):
     # Prepare workspace
     workspace = f'{directory_path}/{example_id}_{uuid.uuid4().hex}'
     if not os.path.exists(workspace):
@@ -85,15 +79,9 @@ def mainworkflow(input: dict):
         )
         # logging.info(novice_code)
     return {
-        "img_path": f"{workspace}/novice_final.png",
+        "image": f"{workspace}/novice_final.png",
         "rollback": f"{workspace}/novice.png",
     }
-
-from evaluator import gpt_4v_evaluate
-
-@register_evaluator
-def matplot_eval(gold, pred) -> float:
-    return gpt_4v_evaluate(gold['ground_truth'], pred['img_path'], pred['rollback'])
 
 if __name__ == "__main__":
     print("-- Running main workflow --")
@@ -112,9 +100,9 @@ if __name__ == "__main__":
         if not os.path.exists(directory_path):
             os.makedirs(directory_path, exist_ok=True)
         
-        mainworkflow({
-            'query': novice_instruction,
-            'directory_path': directory_path,
-            'example_id': example_id,
-            'input_path': f'{data_path}/data/{example_id}',
-        })
+        mainworkflow(
+            query=novice_instruction,
+            directory_path=directory_path,
+            example_id=example_id,
+            input_path=f'{data_path}/data/{example_id}',
+        )

@@ -57,11 +57,12 @@ Please only provide a valid SQL query as your answer. Do not include any additio
 """
 
 
-
+lm_config = cognify.LMConfig(model="gpt-4o-mini", kwargs={"temperature": 0.0})
 exec = cognify.Model(agent_name="revision",
             system_prompt=system_prompt, 
-            inputs=[cognify.Input(name=input) for input in inputs], 
-            output=cognify.OutputLabel(name=output_format, custom_output_format_instructions=output_format_instructions))
+            input_variables=[cognify.Input(name=input) for input in inputs], 
+            output=cognify.OutputLabel(name=output_format, custom_output_format_instructions=output_format_instructions),
+            lm_config=lm_config)
 raw_runnable_exec = cognify.as_runnable(exec) | RawSqlOutputParser()
 
 @chain

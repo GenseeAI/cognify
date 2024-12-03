@@ -348,7 +348,7 @@ class Model(Module):
     ):
         # input variables will always take precedence
         if not inputs:
-            assert messages, "Messages must be provided"
+            assert messages, f"Messages must be provided for '{self.name}'"
             final_message_list = messages
         else:
             if isinstance(list(inputs.keys())[0], Input):
@@ -359,7 +359,7 @@ class Model(Module):
         if not self.lm_config:
             assert (
                 model_kwargs
-            ), "Model kwargs must be provided if LM config is not set at initialization"
+            ), f"Model kwargs must be provided if LM config is not set at initialization for '{self.name}'"
             full_kwargs = model_kwargs
         else:
             full_kwargs = self.lm_config.get_model_kwargs()
@@ -400,11 +400,12 @@ class Model(Module):
         return result
 
     def _get_input_messages(self, inputs: Dict[str, str]) -> List[APICompatibleMessage]:
+        initialized_input_names = [input.name for input in self.input_variables]
         assert set(inputs.keys()) == set(
-            [input.name for input in self.input_variables]
-        ), "Input variables do not match"
+            initialized_input_names
+        ), f"Input variables do not match, '{self.name}' initialized with {initialized_input_names} but provided {inputs.keys()}"
 
-        input_names = ", ".join(f"`{name}`" for name in inputs.keys())
+        input_names = ", ".join(f"`{name}`" for name in initialized_input_names)
         messages = [
             CompletionMessage(
                 role="user",
@@ -457,7 +458,7 @@ class StructuredModel(Model):
     ):
         assert isinstance(
             output_format.schema, type(BaseModel)
-        ), "Output format must be a Pydantic `BaseModel`"
+        ), f"Output format must be a Pydantic `BaseModel` for {agent_name}"
 
         self.output_format: OutputFormat = output_format
         super().__init__(

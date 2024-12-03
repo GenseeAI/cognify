@@ -6,6 +6,8 @@ import debugpy
 import multiprocessing as mp
 import sys
 
+
+
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__))))
 
 from runner.task import Task
@@ -144,16 +146,3 @@ def read_from_file(data_path, args):
         )
     eval_data = [(input, None) for input in inputs]
     return eval_data
-
-import cognify
-import numpy as np
-
-@cognify.register_data_loader
-def load_data():
-    args = parse_arguments()
-    all_train = read_from_file('data/dev/other_sub_sampled.json', args)
-    test_set = read_from_file('data/dev/sub_sampled_bird_dev_set.json', args)
-    
-    # shuffle the data
-    all_train = np.random.permutation(all_train).tolist()
-    return all_train[:100], all_train[100:], test_set[:10]

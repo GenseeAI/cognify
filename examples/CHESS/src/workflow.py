@@ -9,41 +9,17 @@ import sys
 sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 import os
-import debugpy
-import argparse
-import json
 from datetime import datetime
 
 from runner.run_manager import RunManager
-from runner.database_manager import DatabaseManager
-from runner.logger import Logger
-from pipeline.pipeline_manager import PipelineManager
 from runner.task import Task
-from typing import Any, Dict, List, TypedDict, Callable
-from langgraph.graph import END, StateGraph
+import cognify
 
-from pipeline.keyword_extraction import keyword_extraction
-from pipeline.entity_retrieval import entity_retrieval
-from pipeline.context_retrieval import context_retrieval
-from pipeline.column_filtering import column_filtering
-from pipeline.table_selection import table_selection
-from pipeline.column_selection import column_selection
-from pipeline.candidate_generation import candidate_generation
-from pipeline.revision import revision
-from pipeline.evaluation import evaluation
-from pipeline.annotated import cognify_registry
-from pipeline.workflow_builder import build_pipeline
-
-from cognify.optimizer import register_workflow
-
-
-@register_workflow
-def worker(input):
+@cognify.register_workflow
+def worker(args, dataset):
     """
     Main function to run the pipeline with the specified configuration.
     """
-    args = input['args']
-    dataset = input['dataset']
     assert len(dataset) == 1, "Worker process perform one task at a time"
     
     run_start_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")

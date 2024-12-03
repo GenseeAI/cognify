@@ -37,7 +37,7 @@ class WorkflowBuilder:
         nodes = pipeline_nodes.split("+")
         logging.info(f"Building workflow with nodes: {nodes}")
         self._add_nodes(nodes)
-        self.graph.set_entry_point(nodes[0])
+        self.workflow.set_entry_point(nodes[0])
         self._add_edges([(nodes[i], nodes[i+1]) for i in range(len(nodes) - 1)])
         self._add_edges([(nodes[-1], END)])
         logging.info("Workflow built successfully")
@@ -51,7 +51,7 @@ class WorkflowBuilder:
         """
         for node_name in nodes:
             if node_name in globals() and callable(globals()[node_name]):
-                self.graph.add_node(node_name, globals()[node_name])
+                self.workflow.add_node(node_name, globals()[node_name])
                 logging.info(f"Added node: {node_name}")
             else:
                 logging.error(f"Node function '{node_name}' not found in global scope")
@@ -64,7 +64,7 @@ class WorkflowBuilder:
             edges (list): A list of tuples representing the edges.
         """
         for src, dst in edges:
-            self.graph.add_edge(src, dst)
+            self.workflow.add_edge(src, dst)
             logging.info(f"Added edge from {src} to {dst}")
 
 def build_pipeline(pipeline_nodes: str) -> Callable:
@@ -79,6 +79,6 @@ def build_pipeline(pipeline_nodes: str) -> Callable:
     """
     builder = WorkflowBuilder()
     builder.build(pipeline_nodes)
-    app = builder.graph.compile()
+    app = builder.workflow.compile()
     logging.info("Pipeline built and compiled successfully")
     return app

@@ -79,8 +79,10 @@ demos = [
 
 ]
 
+lm_config = cognify.LMConfig(model="gpt-4o-mini", kwargs={"temperature": 0.2})
 exec = cognify.Model(agent_name="keyword_extraction",
              system_prompt=system_prompt, 
-             inputs=[cognify.Input(name=input) for input in inputs], 
-             output=cognify.OutputLabel(name=output_format, custom_output_format_instructions=output_format_instructions))
+             input_variables=[cognify.Input(name=input) for input in inputs], 
+             output=cognify.OutputLabel(name=output_format, custom_output_format_instructions=output_format_instructions),
+             lm_config=lm_config)
 runnable_exec = cognify.as_runnable(exec) | PythonListOutputParser()

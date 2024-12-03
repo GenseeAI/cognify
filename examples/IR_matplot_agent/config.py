@@ -1,28 +1,62 @@
-import base64
+import cognify
 import json
-import logging
+import numpy as np
 import os
-import re
-import shutil
-import glob
-import sys
-sys.path.insert(0, sys.path[0]+"/../")
-import warnings
 
+# ================= Data Loader =================
+@cognify.register_data_loader
+def load_data():
+    def load_from_file(input_file):
+        data_path = 'benchmark_data'
+        # open the json file 
+        data = json.load(open(f'{data_path}/{input_file}'))
+        
+        all_data = []
+        for item in data:
+            novice_instruction = item['simple_instruction']
+            expert_instruction = item['expert_instruction']
+            example_id = item['id'] 
+            # directory_path = f'examples/IR_matplot_agent/new_opt_runs_test_data_mini_reason'
+            directory_path = f'opt_runs'
+
+            if not os.path.exists(directory_path):
+                os.makedirs(directory_path, exist_ok=True)
+            
+            input = {
+                'query': novice_instruction,
+                "directory_path": directory_path,
+                "example_id": example_id,
+                "input_path": f'{data_path}/data/{example_id}',
+            }
+            label = {"ground_truth": f"benchmark_data/ground_truth/example_{example_id}.png"}
+            all_data.append((input, label))
+        return all_data
+            
+    all_train = load_from_file('train_data.json')
+    test_data = load_from_file('test_data.json')
+    train_indices = np.random.choice(range(len(all_train)), 40, replace=False).tolist()
+    eval_indices = list(set(range(len(all_train))) - set(train_indices))
+    
+    train_data = [all_train[i] for i in train_indices]
+    eval_data = [all_train[i] for i in eval_indices]
+    return train_data, eval_data, test_data
+    
+# ================= Evaluator ==================
 from openai import OpenAI
-from cognify.graph.base import StatePool
-import dotenv
-
-dotenv.load_dotenv()
+import warnings
+import re
+import base64
 
 BASE_URL='https://api.openai.com/v1'
 API_KEY=os.environ["OPENAI_API_KEY"]
+
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
-def gpt_4v_evaluate(ground_truth, image, rollback):
+@cognify.register_evaluator
+def gpt_4o_evaluate(ground_truth, image, rollback):
     client = OpenAI(
         api_key=API_KEY,
         base_url=BASE_URL,)
@@ -92,24 +126,6 @@ def gpt_4v_evaluate(ground_truth, image, rollback):
     return score
 
 
-def mainworkflow(test_sample_id, plot_path):
-    ground_truth = f"/mnt/ssd4/lm_compiler/examples/IR_matplot_agent/benchmark_data/ground_truth/example_{test_sample_id}.png"
-
-    image = plot_path
-    image_rollback = plot_path
-
-    plot_result = gpt_4v_evaluate(ground_truth, image, image_rollback)
-    print(plot_result)
-  
-def vision_score(gt, state: StatePool):
-  pred_path = os.path.join(state.news('workspace'), state.news('plot_file_name'))
-  ground_truth = f"/mnt/ssd4/lm_compiler/examples/IR_matplot_agent/benchmark_data/ground_truth/example_{state.news('sample_id')}.png"
-  if not os.path.exists(ground_truth):
-    return 0
-  return gpt_4v_evaluate(ground_truth, pred_path, pred_path)
-
-if __name__ == "__main__":
-    # Get the number passed as an argument
-    idx = int(sys.argv[1])
-    plot_path = sys.argv[2]
-    mainworkflow(idx, plot_path)
+# ================= Search Configuration =================
+from cognify.hub.search import datavis
+optimize_control_param = datavis.create_search(opt_log_dir='opt_results', evaluator_batch_size=50)

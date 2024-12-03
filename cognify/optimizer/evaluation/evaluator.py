@@ -297,7 +297,7 @@ class EvalTask:
             for field in workflow_args:
                 if field not in workflow_defaults and field not in input:
                     raise ValueError(
-                        f"Missing field {field} in input when calling the workflow\nAvailable fields: {input.keys()}"
+                        f"Missing field `{field}` in input when calling the workflow\nAvailable fields: {input.keys()}"
                     )
             
             start_time = time.time()
