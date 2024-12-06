@@ -1,7 +1,7 @@
 import cognify
 from cognify.hub.evaluators import f1_score_set
 
-@cognify.register_opt_score_fn
+@cognify.register_evaluator
 def doc_f1(pred_docs, gold_docs):
     pred_docs = set(pred_docs)
     gold_docs = set(gold_docs)

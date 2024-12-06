@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from cognify._compat import override
+from cognify.llm.litellm_wrapper import litellm_completion
 from cognify.llm.prompt import (
     Input,
     FilledInput,
@@ -236,7 +237,7 @@ class Model(Module):
         return sum(
             [
                 response_metadata.cost
-                for response_metadata in self.response_metadata_history
+                for response_metadata in self.response_metadata_history if response_metadata.cost is not None
             ]
         )
 
@@ -439,8 +440,8 @@ class Model(Module):
         self, messages: List[APICompatibleMessage], model_kwargs: dict
     ):
         model = model_kwargs.pop("model")
-        response = completion(
-            model, self._get_api_compatible_messages(messages), **model_kwargs
+        response = litellm_completion(
+            model, self._get_api_compatible_messages(messages), model_kwargs
         )
         return response
 
@@ -524,11 +525,12 @@ class StructuredModel(Model):
             )
         else:
             model = model_kwargs.pop("model")
-            response = completion(
-                model,
-                self._get_api_compatible_messages(messages),
-                response_format=self.output_format.schema,
-                **model_kwargs,
+
+            response = litellm_completion(
+                model, 
+                self._get_api_compatible_messages(messages), 
+                model_kwargs, 
+                response_format=self.output_format.schema
             )
             return response
 

@@ -301,32 +301,42 @@ class EvalTask:
                     )
             
             start_time = time.time()
-            result = schema.program(**input)
             end_time = time.time()
-            # merge input/result/label to a single dict
-            state = {**input, **result, **label}
-            score = evaluator.score(state)
-
-            # get price and demo of running the program
+            score = 0.0
+            result = None   # this value is unused in `get_score`, so we can set this to `None` -- should refactor this
             price = 0.0
             lm_to_demo = {}
-            for lm in Module.all_of_type(module_pool.values(), Model):
-                price += lm.get_total_cost()
-                demo = lm.get_last_step_as_demo()
-                if demo is not None:
-                    lm_to_demo[lm.name] = demo
 
-            q.put(
-                (
-                    task_index,
-                    True,
-                    result,
-                    score,
-                    price,
-                    lm_to_demo,
-                    end_time - start_time,
+            try:
+                result = schema.program(**input)
+                end_time = time.time()
+                # merge input/result/label to a single dict
+                state = {**input, **result, **label}
+                score = evaluator.score(state)
+            except Exception as e:
+                # catch any errors thrown during the workflow and treat as an invalid result by scoring 0
+                # Note: scoring 0 may be problematic if the evaluator's range includes negative numbers
+                logger.error(f"Workflow execution threw error for task {task_index}: {e}. Automatic score of 0")
+                end_time = time.time()  # this isn't accurate if the process is interrupted
+            finally:
+                # get price and demo of running the program
+                for lm in Module.all_of_type(module_pool.values(), Model):
+                    price += lm.get_total_cost()
+                    demo = lm.get_last_step_as_demo()
+                    if demo is not None:
+                        lm_to_demo[lm.name] = demo
+
+                q.put(
+                    (
+                        task_index,
+                        True,
+                        result, # this value is unused in `get_score`
+                        score,
+                        price,
+                        lm_to_demo,
+                        end_time - start_time,
+                    )
                 )
-            )
         except KeyboardInterrupt:
             q.put((task_index, False, None, 0.0, 0.0, None, 0.0))
         except Exception as e:

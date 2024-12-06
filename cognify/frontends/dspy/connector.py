@@ -71,7 +71,8 @@ class PredictModel(dspy.Module):
 
         # lm config
         lm_client: dspy.LM = dspy.settings.get("lm", None)
-        assert lm_client, "Expected lm client, got none"
+
+        assert lm_client, "Expected lm to be configured in dspy"
         lm_config = LMConfig(model=lm_client.model, kwargs=lm_client.kwargs)
 
         # always treat as structured to provide compatiblity with forward function
@@ -103,6 +104,9 @@ class PredictModel(dspy.Module):
                 messages, inputs
             )  # kwargs have already been set when initializing cog_lm
             kwargs: dict = result.model_dump()
+            for k,v in kwargs.items():
+                if not v:
+                    raise ValueError(f"{self.cog_lm.name} did not generate a value for field `{k}`, consider using a larger model for structured output")
             return dspy.Prediction(**kwargs)
 
 

@@ -1,9 +1,9 @@
 from abc import ABCMeta
 from typing import List, Union
 from cognify.hub.cogs.common import CogBase, CogLayerLevel, OptionBase, NoChange
-from cognify.llm import Model, StructuredModel
+from cognify.llm import Model, StructuredModel, litellm_completion
 from cognify.llm.model import APICompatibleMessage
-from litellm import ModelResponse, completion
+from litellm import ModelResponse
 import copy
 
 import logging
@@ -116,15 +116,15 @@ class ReasonThenFormat(OptionBase, metaclass=ReasoningOptionMeta):
 
         full_messages = [lm_module.system_message.to_api()] + messages
         if isinstance(lm_module, StructuredModel):
-            response = completion(
+            response = litellm_completion(
                 model,
                 full_messages,
+                model_kwargs,
                 response_format=lm_module.output_format.schema,
-                **model_kwargs,
             )
             responses.append(response)
         else:
-            response = completion(model, full_messages, **model_kwargs)
+            response = litellm_completion(model, full_messages, model_kwargs)
             responses.append(response)
         return responses
 
@@ -163,7 +163,7 @@ class ZeroShotCoT(ReasonThenFormat):
                 "content": "Let's solve this problem step by step before giving the final response\n",
             }
         )
-        response = completion(model, chat_messages, **model_kwargs)
+        response = litellm_completion(model, chat_messages, model_kwargs)
         return [response]
 
 
@@ -194,5 +194,5 @@ class PlanBefore(ReasonThenFormat):
                 "content": "Let's first break down the task into several simpler sub-tasks that each covers different aspect of the original task. Clearly state each sub-question and provide your response to each one of them.",
             }
         )
-        response = completion(model, chat_messages, **model_kwargs)
+        response = litellm_completion(model, chat_messages, model_kwargs)
         return [response]

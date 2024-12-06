@@ -56,7 +56,7 @@ class TreeOfThought(ReasonThenFormat):
         prompt = copy.deepcopy(current_messages)
         prompt.append({"role": "user", "content": "What should we consider next?"})
         for _ in range(self.beam_width):
-            response = completion(self.model, prompt, **self.model_kwargs)
+            response = litellm_completion(self.model, prompt, self.model_kwargs)
             self.model_responses.append(response)
             new_path = current_messages + [
                 {
@@ -80,7 +80,7 @@ class TreeOfThought(ReasonThenFormat):
                     "content": "Please rate the quality of the reasoning so far on a scale of 1 to 10.",
                 }
             ]
-            evaluation = completion(self.model, eval_prompt, **self.model_kwargs)
+            evaluation = litellm_completion(self.model, eval_prompt, self.model_kwargs)
             self.model_responses.append(evaluation)
             score = self.extract_score(evaluation.choices[0].message.content)
             scored_candidates.append((score, candidate))
