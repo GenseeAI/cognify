@@ -16,12 +16,13 @@ from cognify.run.optimize import optimize
 from cognify.run.evaluate import evaluate
 from cognify.run.inspect import inspect
 from cognify._logging import _configure_logger
+from cognify._tracing import trace_cli_args, trace_workflow, initial_usage_message
 
 logger = logging.getLogger(__name__)
 
-
 def from_cognify_args(args):
     if args.mode == "optimize":
+        trace_cli_args(args)
         return OptimizationArgs.from_cli_args(args)
     elif args.mode == "evaluate":
         return EvaluationArgs.from_cli_args(args)
@@ -32,7 +33,7 @@ def from_cognify_args(args):
 
 
 def parse_pipeline_config_file(config_path, load_data: bool = True):
-    config_module = capture_module_from_fs(config_path)
+    config_module = capture_module_from_fs(config_path, mode="config")
 
     # get optimizer control parameters
     control_param = ControlParameter.build_control_param(loaded_module=config_module)
@@ -55,6 +56,8 @@ def optimize_routine(opt_args: OptimizationArgs):
     (train_set, val_set, test_set), control_param = parse_pipeline_config_file(
         opt_args.config
     )
+
+    trace_workflow(opt_args.workflow)
 
     cost, frontier, opt_logs = optimize(
         script_path=opt_args.workflow,
@@ -99,6 +102,8 @@ def main():
     # print("Waiting for debugger attach")
     # debugpy.wait_for_client()
     # debugpy.breakpoint()
+
+    initial_usage_message()
 
     parser = argparse.ArgumentParser()
     init_cognify_args(parser)

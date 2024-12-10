@@ -9,6 +9,7 @@ from cognify.hub.cogs.reasoning import ZeroShotCoT, PlanBefore
 from cognify.optimizer.control_param import ControlParameter
 from dataclasses import dataclass
 
+from cognify._tracing import trace_default_search
 
 @dataclass
 class SearchParams:
@@ -202,6 +203,8 @@ def create_search(
         opt_log_dir,
         model_selection_cog,
     )
+
+    trace_default_search(search_type, quality_constraint)
 
     if search_type == "light":
         return create_light_search(search_params)

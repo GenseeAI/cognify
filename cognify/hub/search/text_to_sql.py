@@ -6,6 +6,7 @@ from cognify.hub.cogs.reasoning import ZeroShotCoT, PlanBefore
 from cognify.hub.search.default import SearchParams
 from cognify.optimizer.control_param import ControlParameter
 from cognify.llm import LMConfig
+from cognify._tracing import trace_custom_search
 
 
 def create_text_to_sql_search(search_params: SearchParams) -> ControlParameter:
@@ -97,4 +98,5 @@ def create_search(
         opt_log_dir,
         model_selection_cog,
     )
+    trace_custom_search("text_to_sql", n_trials, quality_constraint)
     return create_text_to_sql_search(search_params)

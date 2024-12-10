@@ -126,7 +126,7 @@ class EvalFn:
         if dir not in sys.path:
             sys.path.append(dir)
 
-        module = capture_module_from_fs(self.score_file_path)
+        module = capture_module_from_fs(self.score_file_path, mode="score")
         score_fn = get_registered_opt_score_fn()
         if score_fn is None:
             raise ValueError("No score function found in the config file")
