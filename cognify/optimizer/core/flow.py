@@ -129,6 +129,7 @@ class OptConfig:
     param_save_path: str = field(default=None)
     frugal_eval_cost: bool = field(default=True)
     use_SH_allocation: bool = field(default=False)
+    patience: tuple[float,float,int] = field(default=(0.01,0.01,5))
 
     def finalize(self):
         if not os.path.exists(self.log_dir):
