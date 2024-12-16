@@ -9,11 +9,11 @@ Get Optimization Results
 
 Before running Cognify, let's first evaluate the original workflow's generation quality and cost. 
 
-This can be done by setting the ``-s NoChange`` flag with ``cognify evaluate`` to indicate that we are not optimizing the workflow.
+This can be done by setting the ``--select Original`` flag with ``cognify evaluate`` to indicate that we are not optimizing the workflow.
 
 .. code-block:: console
 
-    $ cognify evaluate workflow.py -s NoChange
+    $ cognify evaluate workflow.py --select Original
 
     ----- Testing Raw Program -----
     =========== Evaluation Results ===========
@@ -36,24 +36,24 @@ Below is a sample output we got when running it. Note that because of the non-de
 .. code-block:: console
 
     ================ Optimization Results =================
-    Num Pareto Frontier: 4
+    Number of Optimization Results: 4
     --------------------------------------------------------
-    Pareto_1
+    Optimization_1
       Quality improves by 5%
       Cost is 1.06x original
       Quality: 6.47, Cost per 1K invocation: $7.90
     --------------------------------------------------------
-    Pareto_2
+    Optimization_2
       Quality improves by 6%
       Cost is 1.52x original
       Quality: 6.53, Cost per 1K invocation: $11.39
     --------------------------------------------------------
-    Pareto_3
+    Optimization_3
       Quality improves by 3%
       Cost is 0.11x original
       Quality: 6.37, Cost per 1K invocation: $0.80
     --------------------------------------------------------
-    Pareto_4
+    Optimization_4
       Quality improves by 4%
       Cost is 1.05x original
       Quality: 6.43, Cost per 1K invocation: $7.82
@@ -61,7 +61,7 @@ Below is a sample output we got when running it. Note that because of the non-de
 
 Here, Cognify finds four valid optimization results as different versions of the workflow. You can interprete each item as follows:
 
-    Pareto_1 (config ID to select):
+    Optimization_1 (config ID to select):
         Represents one of the Pareto-optimal solutions. It balances the trade-off between quality and cost effectively:
 
         - **Quality Improvement**: 5% higher compared to the original workflow. (higher the better).
@@ -78,9 +78,9 @@ You can also get a summary of the optimization results afterwards with:
 Detailed Transformation Trace
 =============================
 
-You can further inspect the optimizations Cognify applies by checking the :code:`.cog` files under the ``opt_results/pareto_frontier_details`` directory.
+You can further inspect the optimizations Cognify applies by checking the :code:`.cog` files under the ``opt_results/optimized_workflow_details`` directory.
 
-For example, the :code:`Pareto_3.cog` (corresponding to the third result) looks like:
+For example, the :code:`Optimization_3.cog` (corresponding to the third result) looks like:
 
 .. note::
 
@@ -88,11 +88,11 @@ For example, the :code:`Pareto_3.cog` (corresponding to the third result) looks 
     
     Adjust the `ID` to view configurations in your case.
 
-We show ``Pareto_3`` in the above run as an example:
+We show ``Optimization_3`` in the above run as an example:
 
 .. code-block:: console
 
-    $ cat opt_results/pareto_frontier_details/Pareto_3.cog 
+    $ cat opt_results/optimized_workflow_details/Optimization_3.cog 
     Trial - light_opt_layer_6
     Log at: opt_results/light_opt_layer/opt_logs.json
     Quality: 6.367, Cost per 1K invocation ($): 0.80 $
@@ -192,7 +192,7 @@ We show ``Pareto_3`` in the above run as an example:
 
 With this configuration, all agents adopt ``gpt-4o-mini`` as the model, leading to significant cost savings. It also adds ``few-shot examples`` to both agents. The solver agent further benefits from ``Chain-of-Thought`` reasoning.
 
-Overall, ``Pareto_3`` achieves a decent quality of ``6.367`` with a much low cost of ``$0.80`` per 1K invocations.
+Overall, ``Optimization_3`` achieves a decent quality of ``6.367`` with a much low cost of ``$0.80`` per 1K invocations.
 
 Evaluate and Use Optimized Workflow
 ===================================
@@ -201,7 +201,7 @@ You can evaluate the optimized workflow on the test data with:
 
 .. code-block:: console
 
-    $ cognify evaluate workflow.py -s Pareto_3
+    $ cognify evaluate workflow.py --select Optimization_3
 
     ----- Testing select trial light_opt_layer_6 -----
       Params: {'solver_agent_few_shot': 'solver_agent_demos_c4d0a1fc-c664-40ec-a7c2-879ede9a241a', 'solver_agent_reasoning': 'NoChange', 'solver_agent_model_selection': 'None_gpt-4o-mini', 'interpreter_agent_few_shot': 'interpreter_agent_demos_6acf03ae-763f-4357-bba2-0aea69b9f38d', 'interpreter_agent_reasoning': 'ZeroShotCoT', 'interpreter_agent_model_selection': 'None_gpt-4o-mini'}
@@ -220,5 +220,5 @@ You can evaluate the optimized workflow on the test data with:
 
     problem = "A bored student walks down a hall that contains a row of closed lockers, numbered $1$ to $1024$. He opens the locker numbered 1, and then alternates between skipping and opening each locker thereafter. When he reaches the end of the hall, the student turns around and starts back. He opens the first closed locker he encounters, and then alternates between skipping and opening each closed locker thereafter. The student continues wandering back and forth in this manner until every locker is open. What is the number of the last locker he opens?\n"
 
-    new_workflow = cognify.load_workflow(config_id='Pareto_3', opt_result_path='opt_results')
+    new_workflow = cognify.load_workflow(config_id='Optimization_3', opt_result_path='opt_results')
     answer = new_workflow(problem)

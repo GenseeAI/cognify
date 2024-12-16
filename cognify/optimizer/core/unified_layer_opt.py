@@ -653,10 +653,10 @@ class OptimizationLayer:
         pareto_frontier = self.get_pareto_front(candidates=candidates)
         if self.hierarchy_level == 0:
             print(f"================ Optimization Results =================") 
-            print(f"Num Pareto Frontier: {len(pareto_frontier)}")
+            print(f"# of Optimized Workflows Generated: {len(pareto_frontier)}")
             for i, (trial_log, log_path) in enumerate(pareto_frontier):
                 print("--------------------------------------------------------")
-                print("Pareto_{}".format(i + 1))
+                print("Optimization_{}".format(i + 1))
                 # logger.info("  Params: {}".format(trial_log.params))
                 if self.base_quality is not None:
                     print("  Quality improves by {:.0f}%".format(_report_quality_impv(trial_log.score, self.base_quality)))

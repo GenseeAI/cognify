@@ -37,6 +37,18 @@ Recommendations
 Depending on your task, it may be difficult to find or write a suitable evaluator. Here are some tips to help you get started:
 
 * `LLM-as-a-judge`: among the `sample evaluators <https://github.com/GenseeAI/cognify/tree/main/cognify/optimizer/evaluation>`_, we provide a base implementation from which you can build upon. 
+ 
+  * By default, our implementation uses GPT-4o as the judge model. To customize the judge, you can use our provided factory function like so:
+
+   .. code-block:: python
+
+      from cognify.hub.evaluators.llm_judge import llm_judge_factory
+      gpt_4o_mini_judge = llm_judge_factory(model="gpt-4o-mini")
+
+      @cognify.register_evaluator
+      def evaluate(llm_output, ground_truth):
+         # your evaluation logic here
+         return gpt_4o_mini_judge(llm_output, ground_truth)
   
   * We **highly recommend** tailoring the criteria to your task. For example, if you are looking for conciseness, the system prompt should instruct the judge to rate the answer based on its length. 
 

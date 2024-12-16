@@ -253,29 +253,31 @@ An example output looks like this:
    (my_env) user@hostname:/path/to/quickstart$ cognify optimize workflow.py 
    > light_opt_layer | (best score: 0.16, lowest cost@1000: 0.09 $): 100%|███████████████| 10/10 [01:53<00:00, 11.30s/it]
    ================ Optimization Results =================
-   Num Pareto Frontier: 2
+   Number of Optimization Results: 2
    --------------------------------------------------------
-   Pareto_1
+   Optimization_1
+   Quality improves by 5%
+   Cost is 0.95x original
    Quality: 0.160, Cost per 1K invocation: $0.28
-   Applied at: light_opt_layer_4
    --------------------------------------------------------
-   Pareto_2
+   Optimization_2
+   Quality improves by 7%
+   Cost is 0.98x original
    Quality: 0.154, Cost per 1K invocation: $0.09
-   Applied at: light_opt_layer_6
    ========================================================
 
 The optimizer found two optimized workflow versions on the Pareto frontier, i.e., they are the most cost-effective solutions within all searched optimizations.
 
 .. note::
 
-   It's not guaranteed that the optimizer will find any better solutions than the original one. You might get ``Num Pareto Frontier: 0`` in the output.
+   It's not guaranteed that the optimizer will find any better solutions than the original one. You might get ``Number of Optimization Results: 0`` in the output.
 
 Check detailed optimizations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can find all the output workflows' information under the ``opt_results/pareto_frontier_details`` directory (the default directory used by Cognify, which you can change in ``config.py``). 
+You can find all the output workflows' information under the ``opt_results/optimized_workflow_details`` directory (the default directory used by Cognify, which you can change in ``config.py``). 
 
-Beflow is the transformations that ``Pareto_1`` applies to the original workflow: the Chain-of-Thought prompting is applied to the model call, while no few-shot demonstration is added.
+Beflow is the transformations that ``Optimization_1`` applies to the original workflow: the Chain-of-Thought prompting is applied to the model call, while no few-shot demonstration is added.
 
 ::
 
@@ -320,7 +322,7 @@ To see how well an optimized workflow peforms, you can load it into your code an
 
    # load optimized workflow
    optimized_workflow = cognify.load_workflow(
-      config_id='Pareto_1',
+      config_id='Optimization_1',
       opt_result_path='opt_results'
    )
    result = optimized_workflow(question=question, documents=documents)
@@ -331,19 +333,21 @@ When you define your dataloader, you should split the data into train, validatio
 
 .. code-block:: bash
 
-   cognify evaluate workflow.py -s Pareto_1
+   cognify evaluate workflow.py --select Optimization_1
 
 The sample output looks like:
 
 .. code-block:: bash
 
-   (my_env) user@hostname:/path/to/quickstart$ cognify evaluate workflow.py -s Pareto_1
+   (my_env) user@hostname:/path/to/quickstart$ cognify evaluate workflow.py --select Optimization_1
    ----- Testing select trial light_opt_layer_4 -----
    Params: {'qa_agent_few_shot': 'NoChange', 'qa_agent_reasoning': 'ZeroShotCoT'}
    Training Quality: 0.160, Cost per 1K invocation: $0.28
 
    > Evaluation in light_opt_layer_4 | (avg score: 0.20, avg cost@1000: 0.28 $): 100%|███████10/10 [00:07<00:00,  1.42it/s]
    =========== Evaluation Results ===========
+   Quality improves by 25%
+   Cost is 0.95x original
    Quality: 0.199, Cost per 1K invocation: $0.28
    ===========================================
 
@@ -351,4 +355,4 @@ You can also use Cognify to evaluate the original workflow with:
 
 .. code-block:: bash
 
-   cognify evaluate workflow.py -s NoChange
+   cognify evaluate workflow.py --select Original

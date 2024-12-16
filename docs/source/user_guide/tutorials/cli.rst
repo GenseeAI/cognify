@@ -110,9 +110,9 @@ CLI Evaluate Mode Options
 
    * - -s
      - \-\-select
-     - Pareto_1, Pareto_2, ..., NoChange
-     - NoChange
-     - Select a specific configuration by ID for evaluation. Use ``NoChange`` to evaluate the original workflow.
+     - Optimization_1, Optimization_2, ..., or Original
+     - Original
+     - Select a specific configuration by ID for evaluation. Use ``Original`` to evaluate the original workflow.
 
    * - -j
      - \-\-n_parallel
@@ -145,10 +145,10 @@ CLI Inspect Mode Options
      - Description
 
    * - -f
-     - \-\-dump_frontier_details
+     - \-\-dump_optimization_results
      - 
      - False
-     - Dump descriptive details of all Pareto frontiers found during optimization under the ``pareto_frontier_details`` directory in the optimization result folder.
+     - Dump descriptive details of all optimizations found ``optimized_workflow_details`` directory in the optimization result folder.
 
 Example CLI Usage
 ====================
@@ -180,7 +180,7 @@ If config file is named differently and want to overwite the result folder:
 
 ::
 
-   cognify evaluate workflow.py -s Pareto_1
+   cognify evaluate workflow.py --select Optimization_1
 
 Evaluate the original program with a batch size of 50:
 :: 
@@ -191,4 +191,4 @@ Evaluate the original program with a batch size of 50:
 
 ::
 
-   cognify inspect workflow.py --dump_frontier_details
+   cognify inspect workflow.py --dump_optimization_results

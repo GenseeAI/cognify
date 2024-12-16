@@ -404,7 +404,7 @@ class GeneralEvaluatorInterface(ABC):
 
 def _gen_pbar_desc(level, tb, score, price):
     indent = "---" * level + ">"
-    return f"{indent} Evaluation in {tb} | (avg score: {score:.2f}, avg cost@1000: {price*1000:.2f} $)"
+    return f"{indent} Evaluation in {tb} | (avg score: {score:.2f}, avg cost@1000: ${price*1000:.2f})"
 
 
 class EvaluatorPlugin(GeneralEvaluatorInterface):

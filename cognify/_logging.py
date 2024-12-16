@@ -46,5 +46,3 @@ def _configure_logger(log_level):
         )
         warnings.filterwarnings("ignore", category=FutureWarning)
 
-
-_configure_logger("WARNING")
