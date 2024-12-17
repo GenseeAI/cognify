@@ -136,6 +136,7 @@ class SuccessiveHalving:
             key=lambda i: (-outer_indicators[i][0], outer_indicators[i][1]),
         )
         runs_left_to_run = sorted_indicator_indices[: len(self.ready_to_run) // 2]
+        # TODO: consider remove early stopped runs from ready list
         self.ready_to_run = [self.ready_to_run[i] for i in runs_left_to_run]
 
     def execute(self):
@@ -268,7 +269,7 @@ class UpperLevelOptimization(OptimizationLayer):
         opt_config = self.top_down_info.opt_config
         n_iters = opt_config.n_trials // opt_config.throughput
         for i in range(n_iters):
-            if _should_exit():
+            if _should_exit() or self._should_stop:
                 break
             self._optimize_SH(base_program)
             if _should_exit():
