@@ -6,7 +6,7 @@ from cognify.hub.cogs.fewshot import LMFewShot
 from cognify.hub.cogs.reasoning import ZeroShotCoT, PlanBefore
 from cognify.hub.search.default import SearchParams
 from cognify.llm import LMConfig
-
+from cognify._tracing import trace_custom_search
 
 def create_datavis_search(search_params: SearchParams) -> ControlParameter:
     # ================= Inner Loop Config =================
@@ -84,4 +84,5 @@ def create_search(
         opt_log_dir,
         model_selection_cog,
     )
+    trace_custom_search("datavis", n_trials, quality_constraint)
     return create_datavis_search(search_params)
