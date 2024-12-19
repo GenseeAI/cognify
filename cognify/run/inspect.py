@@ -31,6 +31,7 @@ def inspect(
     quality_constraint = None
     base_quality = None
     base_cost = None
+    base_exec_time = None
     if os.path.exists(dry_run_log_path):
         with open(dry_run_log_path, "r") as f:
             dry_run_result = EvaluationResult.from_dict(json.load(f))
@@ -41,6 +42,7 @@ def inspect(
             )
             base_quality = dry_run_result.reduced_score
         base_cost = dry_run_result.reduced_price
+        base_exec_time = dry_run_result.reduced_exec_time
     else:
         logger.warning(
             f"Quality constraint is set but no dry run result found at {dry_run_log_path}, will ignore constraint"
@@ -52,5 +54,6 @@ def inspect(
         quality_constraint=quality_constraint,
         base_quality=base_quality,
         base_cost=base_cost,
+        base_exec_time=base_exec_time
     )
     opt_driver.inspect(dump_frontier_details)

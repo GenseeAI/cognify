@@ -167,6 +167,7 @@ def optimize(
         quality_constraint=control_param.quality_constraint * raw_result.reduced_score,
         base_quality=raw_result.reduced_score,
         base_cost=raw_result.reduced_price,
+        base_exec_time=raw_result.reduced_exec_time
     )
 
     cost, pareto_frontier, opt_logs = opt_driver.run(

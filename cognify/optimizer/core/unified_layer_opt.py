@@ -18,7 +18,7 @@ from concurrent.futures import (
 import threading
 import traceback
 from cognify.optimizer.utils import _cognify_tqdm as tqdm
-from cognify.optimizer.utils import _report_cost_reduction, _report_quality_impv
+from cognify.optimizer.utils import _report_cost_reduction, _report_quality_impv, _report_latency_reduction
 import heapq
 
 from cognify._signal import _should_exit
@@ -94,6 +94,7 @@ class OptimizationLayer:
         quality_constraint: Optional[float] = None,
         base_quality: Optional[float] = None,
         base_cost: Optional[float] = None,
+        base_exec_time: Optional[float] = None,
         hierarchy_level: int = 0,
     ):
         """
@@ -145,9 +146,11 @@ class OptimizationLayer:
 
         self._best_score = None
         self._lowest_cost = None
+        self._lowest_exec_time = None
         self.quality_constraint = quality_constraint
         self.base_quality = base_quality
         self.base_cost = base_cost
+        self.base_exec_time = base_exec_time
         self.hierarchy_level = hierarchy_level
 
     def prepare_opt_env(self):
@@ -265,7 +268,7 @@ class OptimizationLayer:
             )
 
         new_study = optuna.create_study(
-            directions=["maximize", "minimize"],
+            directions=["maximize", "minimize", "minimize"],
             sampler=sampler,
         )
 
@@ -396,20 +399,21 @@ class OptimizationLayer:
         if not eval_result.complete:
             return
 
-        score, price = eval_result.reduced_score, eval_result.reduced_price
+        score, price, exec_time = eval_result.reduced_score, eval_result.reduced_price, eval_result.reduced_exec_time
         self.opt_logs[log_id].score = score
         self.opt_logs[log_id].price = price
+        self.opt_logs[log_id].exec_time = exec_time
 
         self.opt_logs[log_id].eval_cost = eval_result.total_eval_cost
         logger.debug(
-            f"- {self.name} - Trial {trial.number} result: score= {score:.2f}, cost@1000= {price*1000:.3f}"
+            f"- {self.name} - Trial {trial.number} result: score= {score:.2f}, cost@1000= ${price*1000:.3f}, exec_time= {exec_time:.2f}s"
         )
         self.opt_cost += eval_result.total_eval_cost
 
         # update study if any dynamic params can evolve
         with self._study_lock:
             self.add_constraint(score, trial)
-            frozen_trial = self.study.tell(trial, [score, price])
+            frozen_trial = self.study.tell(trial, [score, price, exec_time])
             is_evolved = False
             for params in self.params.values():
                 for param in params:
@@ -516,13 +520,13 @@ class OptimizationLayer:
             logger.error(traceback.format_exc())
             raise
 
-    def _gen_opt_bar_desc(self, score, cost, total_opt_cost):
+    def _gen_opt_bar_desc(self, score, cost, exec_time, total_opt_cost):
         indent = "---" * self.hierarchy_level + ">"
         if self.top_down_info.trace_back:
             opt_trace = " | ".join(self.top_down_info.trace_back)
-            return f"{indent} {self.name} in {opt_trace} | (best score: {score:.2f}, lowest cost@1000: ${cost*1000:.2f}) | Total Optimization Cost: ${total_opt_cost:.2f}"
+            return f"{indent} {self.name} in {opt_trace} | (best score: {score:.2f}, lowest cost@1000: ${cost*1000:.2f}), lowest exec time: {exec_time:.2f}s | Total Optimization Cost: ${total_opt_cost:.2f}"
         else:
-            return f"{indent} {self.name} | (best score: {score:.2f}, lowest cost@1000: ${cost*1000:.2f}) | Total Optimization Cost: ${total_opt_cost:.2f}"
+            return f"{indent} {self.name} | (best score: {score:.2f}, lowest cost@1000: ${cost*1000:.2f}), lowest exec time: {exec_time:.2f}s | Total Optimization Cost: ${total_opt_cost:.2f}"
 
     def _optimize(self, base_program: list[Module]):
         opt_config = self.top_down_info.opt_config
@@ -530,7 +534,7 @@ class OptimizationLayer:
         pbar_position = ask_for_position()
 
         def _update_pbar(pbar, eval_result: EvaluationResult):
-            score, cost = self.get_eval_feedback(eval_result)
+            score, cost, exec_time = self.get_eval_feedback(eval_result)
             if score is not None and cost is not None:
                 self._best_score = (
                     score if self._best_score is None else max(self._best_score, score)
@@ -538,17 +542,21 @@ class OptimizationLayer:
                 self._lowest_cost = (
                     cost if self._lowest_cost is None else min(self._lowest_cost, cost)
                 )
+                self._lowest_exec_time = (
+                    exec_time if self._lowest_exec_time is None else min(self._lowest_exec_time, exec_time)
+                )
                 pbar.set_description(
-                    self._gen_opt_bar_desc(self._best_score, self._lowest_cost, self.opt_cost)
+                    self._gen_opt_bar_desc(self._best_score, self._lowest_cost, self._lowest_exec_time, self.opt_cost)
                 )
             pbar.update(1)
 
         initial_score = self._best_score if self._best_score is not None else 0.0
         initial_cost = self._lowest_cost if self._lowest_cost is not None else 0.0
+        initial_exec_time = self._lowest_exec_time if self._lowest_exec_time is not None else 0.0
         with tqdm(
             total=num_current_trials + opt_config.n_trials,
             initial=num_current_trials,
-            desc=self._gen_opt_bar_desc(initial_score, initial_cost, self.opt_cost),
+            desc=self._gen_opt_bar_desc(initial_score, initial_cost, initial_exec_time, self.opt_cost),
             leave=self.hierarchy_level == 0,
             position=pbar_position,
         ) as pbar:
@@ -593,7 +601,7 @@ class OptimizationLayer:
                                 executor.shutdown(wait=False, cancel_futures=True)
                                 break
                         except Exception as e:
-                            logger.error(f"Error in evaluating task: {e}")
+                            logger.error(f"Error in evaluating task: {e}", exc_info=True)
                             raise
 
         release_position(pbar_position)
@@ -612,11 +620,11 @@ class OptimizationLayer:
         """
         if not candidates:
             return []
-        score_cost_list = []
+        score_cost_time_list = []
         for trial_log, log_path in candidates:
-            score_cost_list.append((trial_log.score, trial_log.price))
+            score_cost_time_list.append((trial_log.score, trial_log.price, trial_log.exec_time))
 
-        vectors = np.array([[-score, price] for score, price in score_cost_list])
+        vectors = np.array([[-score, price, exec_time] for score, price, exec_time in score_cost_time_list])
         is_efficient = np.ones(vectors.shape[0], dtype=bool)
         for i, v in enumerate(vectors):
             if is_efficient[i]:
@@ -662,7 +670,9 @@ class OptimizationLayer:
                     print("  Quality improves by {:.0f}%".format(_report_quality_impv(trial_log.score, self.base_quality)))
                 if self.base_cost is not None:
                     print("  Cost is {:.2f}x original".format(_report_cost_reduction(trial_log.price, self.base_cost)))
-                print("  Quality: {:.2f}, Cost per 1K invocation: ${:.2f}".format(trial_log.score, trial_log.price * 1000))
+                if self.base_exec_time is not None:
+                    print("  Execution time is {:.2f}x original".format(_report_latency_reduction(trial_log.exec_time, self.base_exec_time)))
+                print("  Quality: {:.2f}, Cost per 1K invocation: ${:.2f}, Execution time: {:.2f}s".format(trial_log.score, trial_log.price * 1000, trial_log.exec_time))
                 # print("  Applied at: {}".format(trial_log.id))
                 # logger.info("  config saved at: {}".format(log_path))
 
@@ -678,12 +688,13 @@ class OptimizationLayer:
             if candidates:
                 self._best_score = max([log.score for log, _ in candidates])
                 self._lowest_cost = min([log.price for log, _ in candidates])
+                self._lowest_exec_time = min([log.exec_time for log, _ in candidates])
 
         for trial_log_id, trial_log in self.opt_logs.items():
             assert trial_log.finished, f"Trial {trial_log_id} is not finished"
             trial = optuna.trial.create_trial(
                 params=trial_log.params,
-                values=[trial_log.score, trial_log.price],
+                values=[trial_log.score, trial_log.price, trial_log.exec_time],
                 distributions=self.param_categorical_dist,
             )
             if self.quality_constraint is not None:
@@ -760,11 +771,12 @@ class BottomLevelTrialLog(TrialLog):
         id=None,
         score=0,
         price=0,
+        exec_time=0,
         eval_cost=0,
         finished=False,
         eval_task: dict = None,
     ):
-        super().__init__(params, bo_trial_id, id, score, price, eval_cost, finished)
+        super().__init__(params, bo_trial_id, id, score, price, exec_time, eval_cost, finished)
         self.eval_task = eval_task
 
     def to_dict(self):
@@ -808,20 +820,21 @@ class BottomLevelOptimization(OptimizationLayer):
     ):
         if not eval_result.complete:
             return
-        score, price = eval_result.reduced_score, eval_result.reduced_price
+        score, price, exec_time = eval_result.reduced_score, eval_result.reduced_price, eval_result.reduced_exec_time
         self.opt_logs[log_id].score = score
         self.opt_logs[log_id].price = price
+        self.opt_logs[log_id].exec_time = exec_time
 
         self.opt_logs[log_id].eval_cost = eval_result.total_eval_cost
         logger.debug(
-            f"- {self.name} - Trial {trial.number} result: score= {score:.2f}, cost@1000= {price*1000:.3f}"
+            f"- {self.name} - Trial {trial.number} result: score= {score:.2f}, cost@1000= ${price*1000:.3f}, exec_time= {exec_time:.2f}s"
         )
         self.opt_cost += eval_result.total_eval_cost
 
         # update study if any dynamic params can evolve
         with self._study_lock:
             self.add_constraint(score, trial)
-            frozen_trial = self.study.tell(trial, [score, price])
+            frozen_trial = self.study.tell(trial, [score, price, exec_time])
             existing_trials = self.get_finished_bo_trials(False)
             if (
                 len(existing_trials) > 0
@@ -845,7 +858,7 @@ class BottomLevelOptimization(OptimizationLayer):
                         pbar_position=pbar_position, hierarchy_level=self.hierarchy_level + 1
                     )
                     logger.debug(
-                        f"Validation set result: score= {evolve_result.reduced_score:.2f}, cost@1000= {evolve_result.reduced_price*1000:.3f}"
+                        f"Validation set result: score= {evolve_result.reduced_score:.2f}, cost@1000= {evolve_result.reduced_price*1000:.3f}, exec_time= {evolve_result.reduced_exec_time:.2f}s"
                     )
 
                 is_evolved = False
@@ -872,8 +885,8 @@ class BottomLevelOptimization(OptimizationLayer):
     def get_eval_feedback(self, eval_result: EvaluationResult):
         avg_score = eval_result.reduced_score
         if self.quality_constraint is None or avg_score >= self.quality_constraint:
-            return avg_score, eval_result.reduced_price
-        return None, None
+            return avg_score, eval_result.reduced_price, eval_result.reduced_exec_time
+        return None, None, None
 
     def pre_optimize(self):
         """Bootstrap the initial evolving params with given config
@@ -941,6 +954,7 @@ class BottomLevelOptimization(OptimizationLayer):
         opt_log_path: str,
         base_quality: float = None,
         base_cost: float = None,
+        base_exec_time: float = None
     ) -> EvaluationResult:
         if not os.path.exists(opt_log_path):
             raise ValueError(f"Opt log path {opt_log_path} does not exist")
@@ -963,7 +977,9 @@ class BottomLevelOptimization(OptimizationLayer):
             print("  Quality improves by {:.0f}%".format(_report_quality_impv(trial_log.score, base_quality)))
         if base_cost is not None:
             print("  Cost is {:.2f}x original".format(_report_cost_reduction(trial_log.price, base_cost)))
-        print("  Quality: {:.2f}, Cost per 1K invocation: ${:.2f}".format(eval_result.reduced_score, eval_result.reduced_price * 1000))
+        if base_exec_time is not None:
+            print("  Execution time is {:.2f}x original".format(_report_latency_reduction(trial_log.exec_time, base_exec_time)))
+        print("  Quality: {:.2f}, Cost per 1K invocation: ${:.2f}, Execution time: {:.2f}s".format(eval_result.reduced_score, eval_result.reduced_price * 1000, eval_result.reduced_exec_time))
         print("===========================================")
 
         return eval_result

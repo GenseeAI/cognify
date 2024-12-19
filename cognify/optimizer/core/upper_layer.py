@@ -57,10 +57,11 @@ class LayerEvaluator(GeneralEvaluatorInterface):
             inner_log_ids.append(trial_log.id)
             scores.append(trial_log.score)
             prices.append(trial_log.price)
-            exec_times.append(trial_log.eval_cost)
+            exec_times.append(trial_log.exec_time)
 
         reduced_score = max(scores)
         reduced_price = min(prices)
+        reduced_exec_time = min(exec_times)
         result = EvaluationResult(
             ids=inner_log_ids,
             scores=scores,
@@ -70,6 +71,7 @@ class LayerEvaluator(GeneralEvaluatorInterface):
             complete=True,
             reduced_score=reduced_score,
             reduced_price=reduced_price,
+            reduced_exec_time=reduced_exec_time,
             demos={"config_log_path": layer_task.opt_config.opt_log_path},
         )
         return result
@@ -159,12 +161,13 @@ class UpperLevelTrialLog(TrialLog):
         id=None,
         score=0,
         price=0,
+        exec_time=0,
         eval_cost=0,
         finished=False,
         next_level_log_dir=None,
         num_next_level_trials=0,
     ):
-        super().__init__(params, bo_trial_id, id, score, price, eval_cost, finished)
+        super().__init__(params, bo_trial_id, id, score, price, exec_time, eval_cost, finished)
         self.next_level_log_dir = next_level_log_dir
         self.num_next_level_trials = num_next_level_trials
 
@@ -214,8 +217,8 @@ class UpperLevelOptimization(OptimizationLayer):
 
     def get_eval_feedback(self, eval_result: EvaluationResult):
         if eval_result.reduced_price == float(0xDEADBEEF):
-            return None, None
-        return eval_result.reduced_score, eval_result.reduced_price
+            return None, None, None
+        return eval_result.reduced_score, eval_result.reduced_price, eval_result.reduced_exec_time
 
     def _optimize_iteration(self, base_program):
         next_trial, program, new_trace, log_id = self.propose(base_program, 1)[0]

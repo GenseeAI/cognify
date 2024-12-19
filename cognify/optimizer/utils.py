@@ -89,3 +89,6 @@ def _report_quality_impv(new, base):
 
 def _report_cost_reduction(new, base):
     return new / base
+
+def _report_latency_reduction(new, base):
+    return new / base

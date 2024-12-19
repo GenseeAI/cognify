@@ -24,7 +24,7 @@ from cognify.optimizer.core.flow import TopDownInformation, ModuleTransformTrace
 
 logger = logging.getLogger(__name__)
 
-def default_reduer(xs):
+def default_reducer(xs):
     return sum(xs) / len(xs)
 
 
@@ -43,6 +43,7 @@ class EvaluationResult:
         complete: bool,
         reduced_score: Optional[float] = None,
         reduced_price: Optional[float] = None,
+        reduced_exec_time: Optional[float] = None,
         demos: Optional[Sequence[TDemoInTrial]] = None,
         meta: Optional[dict] = None,
     ) -> None:
@@ -54,6 +55,7 @@ class EvaluationResult:
         self.complete = complete
         self.reduced_score = reduced_score
         self.reduced_price = reduced_price
+        self.reduced_exec_time = reduced_exec_time
         self.demos = demos
         self.meta = meta
 
@@ -62,6 +64,7 @@ class EvaluationResult:
             f"EvalResult: score: {self.reduced_score}, "
             f"price: {self.reduced_price}, "
             f"{len(self.scores)} samples, "
+            f"latency: {self.reduced_exec_time}, "
             f"eval cost: {self.total_eval_cost}, "
             f"avg exec time: {sum(self.exec_times) / len(self.exec_times)} s"
         )
@@ -75,6 +78,7 @@ class EvaluationResult:
         stats["summary"] = {
             "reduced_score": self.reduced_score,
             "reduced_price": self.reduced_price,
+            "reduced_exec_time": self.reduced_exec_time,
             "total_eval_cost": self.total_eval_cost,
             "complete": self.complete,
         }
@@ -103,6 +107,7 @@ class EvaluationResult:
             complete=data["summary"]["complete"],
             reduced_score=data["summary"]["reduced_score"],
             reduced_price=data["summary"]["reduced_price"],
+            reduced_exec_time=data["summary"]["reduced_exec_time"],
         )
 
 
@@ -402,9 +407,9 @@ class GeneralEvaluatorInterface(ABC):
     ) -> EvaluationResult: ...
 
 
-def _gen_pbar_desc(level, tb, score, price):
+def _gen_pbar_desc(level, tb, score, price, exec_time):
     indent = "---" * level + ">"
-    return f"{indent} Evaluation in {tb} | (avg score: {score:.2f}, avg cost@1000: {price*1000:.2f} $)"
+    return f"{indent} Evaluation in {tb} | (avg score: {score:.2f}, avg cost@1000: ${price*1000:.2f}, avg execution time: {exec_time:.2f}s)"
 
 
 class EvaluatorPlugin(GeneralEvaluatorInterface):
@@ -418,6 +423,7 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
         n_parallel: int = 10,
         score_reducer: Callable = None,
         price_reducer: Callable = None,
+        exec_time_reducer: Callable = None,
     ):
         """Specify the evaluation method
 
@@ -433,10 +439,13 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
         
         self.n_parallel = n_parallel
         self.score_reducer = (
-            score_reducer if score_reducer is not None else default_reduer
+            score_reducer if score_reducer is not None else default_reducer
         )
         self.price_reducer = (
-            price_reducer if price_reducer is not None else default_reduer
+            price_reducer if price_reducer is not None else default_reducer
+        )
+        self.exec_time_reducer = (
+            exec_time_reducer if exec_time_reducer is not None else default_reducer
         )
 
         self._evaluator = EvalFn(score_fn=evaluator_fn, score_file_path=evaluator_path)
@@ -477,15 +486,16 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
         sema = mp.Semaphore(n_parallel)
         result_q = mp.Queue()
 
-        total_score, total_cost, n_success = 0.0, 0.0, 0
+        total_score, total_cost, total_exec_time, n_success = 0.0, 0.0, 0.0, 0
         opt_trace = ".".join(task.trace_back)
 
         def update_pbar(pbar, eval_result):
-            nonlocal total_score, total_cost, n_success
+            nonlocal total_score, total_cost, total_exec_time, n_success
             n_success += 1
-            score, price = eval_result[3], eval_result[4]
+            score, price, exec_time = eval_result[3], eval_result[4], eval_result[6]   # using these indices is dangerous
             total_score += score
             total_cost += price
+            total_exec_time += exec_time
             pbar.update(1)
             pbar.set_description(
                 _gen_pbar_desc(
@@ -493,13 +503,14 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
                     opt_trace,
                     total_score / n_success,
                     total_cost / n_success,
+                    total_exec_time / n_success,
                 )
             )
 
         results = []
         with tqdm(
             total=len(indices),
-            desc=_gen_pbar_desc(hierarchy_level, opt_trace, 0.0, 0.0),
+            desc=_gen_pbar_desc(hierarchy_level, opt_trace, 0.0, 0.0, 0.0),
             leave=keep_bar,
             position=pbar_position,
         ) as pbar:
@@ -565,6 +576,7 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
             exec_times.append(exec_time)
         reduced_score = self.score_reducer(scores)
         reduced_price = self.price_reducer(prices)
+        reduced_exec_time = self.exec_time_reducer(exec_times)
         return EvaluationResult(
             ids=[f"{mode}_{i}" for i in data_ids],
             scores=scores,
@@ -574,6 +586,7 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
             complete=len(results) == len(indices),
             reduced_score=reduced_score,
             reduced_price=reduced_price,
+            reduced_exec_time=reduced_exec_time,
             demos=demos,
         )
 

@@ -28,6 +28,7 @@ class MultiLayerOptimizationDriver:
         quality_constraint: float = None,
         base_quality: float = None,
         base_cost: float = None,
+        base_exec_time: float = None,
     ):
         """Driver for multi-layer optimization
 
@@ -40,6 +41,7 @@ class MultiLayerOptimizationDriver:
         self.quality_constraint = quality_constraint
         self.base_quality = base_quality
         self.base_cost = base_cost
+        self.base_exec_time = base_exec_time
 
         # initialize optimization layers
         self.opt_layers: list[OptimizationLayer] = [None] * len(layer_configs)
@@ -67,6 +69,7 @@ class MultiLayerOptimizationDriver:
                     quality_constraint=self.quality_constraint,
                     base_quality=self.base_quality,
                     base_cost=self.base_cost,
+                    base_exec_time=self.base_exec_time,
                     hierarchy_level=idx,
                 )
             else:
@@ -85,6 +88,7 @@ class MultiLayerOptimizationDriver:
                     quality_constraint=self.quality_constraint,
                     base_quality=self.base_quality,
                     base_cost=self.base_cost,
+                    base_exec_time=self.base_exec_time,
                     hierarchy_level=idx,
                 )
             self.opt_layers[idx] = opt_layer
@@ -226,7 +230,9 @@ class MultiLayerOptimizationDriver:
                 details += ("  Quality improves by {:.0f}%\n".format(_report_quality_impv(trial_log.score, self.base_quality)))
             if self.base_cost is not None:
                 details += ("  Cost is {:.2f}x original".format(_report_cost_reduction(trial_log.price, self.base_cost)))
-            details += f"Quality: {trial_log.score:.3f}, Cost per 1K invocation ($): {trial_log.price * 1000:.2f} $\n"
+            if self.base_exec_time is not None:
+                details += ("  Execution time is {:.2f}x original".format(_report_cost_reduction(trial_log.exec_time, self.base_exec_time)))
+            details += f"Quality: {trial_log.score:.3f}, Cost per 1K invocation: ${trial_log.price * 1000:.2f}, Execution time: {trial_log.exec_time:.2f}s \n"
             details += trans
             with open(dump_path, "w") as f:
                 f.write(details)

@@ -197,6 +197,7 @@ class TrialLog:
         id: str = None,
         score: float = 0.0,
         price: float = 0.0,
+        exec_time: float = 0.0,
         eval_cost: float = 0.0,
         finished: bool = False,
     ):
@@ -205,6 +206,7 @@ class TrialLog:
         self.bo_trial_id = bo_trial_id
         self.score = score
         self.price = price
+        self.exec_time = exec_time
         self.eval_cost = eval_cost
         self.finished = finished
 
@@ -215,6 +217,7 @@ class TrialLog:
             "params": self.params,
             "score": self.score,
             "price": self.price,
+            "exec_time": self.exec_time,
             "eval_cost": self.eval_cost,
             "finished": self.finished,
         }
