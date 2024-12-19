@@ -121,6 +121,27 @@ class ModuleTransformTrace:
 
 @dataclass
 class OptConfig:
+    """Configuration for optimization of each layer
+    
+    Attributes:
+        n_trials (int): number of iterations of search.
+        
+        throughput (int, optional): number of trials to run in parallel. Defaults to 2.
+        
+        log_dir (str): directory to save logs.
+        
+        evolve_interval (int): interval to evolve the dynamic cogs.
+        
+        opt_log_path (str): path to save optimization logs.
+        
+        param_save_path (str): path to save optimized parameters.
+        
+        frugal_eval_cost (bool): whether to favor cheaper evaluations in early stage.
+        
+        use_SH_allocation (bool): whether to use Successive Halving strategy.
+        
+        patience (tuple[float,float,int], optional): tuple of (quality_min_delta, cost_min_delta, n_iteration) to set the early stop threshold.
+    """
     n_trials: int
     throughput: int = field(default=2)
     log_dir: str = field(default=None)
@@ -129,6 +150,12 @@ class OptConfig:
     param_save_path: str = field(default=None)
     frugal_eval_cost: bool = field(default=True)
     use_SH_allocation: bool = field(default=False)
+    patience: tuple[float,float,int] = field(default=(0.01,0.01,5))
+    
+    def __post_init__(self):
+        quality_delta, cost_delta, n_iteration = self.patience
+        if quality_delta < 0 or cost_delta < 0 or n_iteration < 0:
+            raise ValueError("patience values should be non-negative")
 
     def finalize(self):
         if not os.path.exists(self.log_dir):
@@ -143,6 +170,18 @@ class OptConfig:
         for key, value in other.__dict__.items():
             if value is not None:
                 setattr(self, key, value)
+    
+    @property
+    def _early_stop_quality_delta(self):
+        return self.patience[0]
+    
+    @property
+    def _early_stop_cost_delta(self):
+        return self.patience[1]
+    
+    @property
+    def _early_stop_n_iteration(self):
+        return self.patience[2]
 
 
 @dataclass
