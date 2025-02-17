@@ -149,11 +149,15 @@ class OptConfig:
 
         frugal_eval_cost (bool): whether to favor cheaper evaluations in early stage.
 
-        use_SH_allocation (bool): whether to use Successive Halving strategy.
-
         patience (Patience, optional): dataclass of (quality_min_delta, cost_min_delta, exec_time_min_delta, n_iteration) to set the early stop threshold.
 
         frac (float): fraction of the optimization from the last layer.
+        
+        use_HB_allocation (bool): whether to use Hyperband strategy.
+        use_SH_allocation (bool): whether to use Successive Halving strategy.
+        prune_rate (int): rate to prune the trials in HB or SH.
+        
+        initial_step_budget (int): initial budget R for HB.
     """
     n_trials: int
     throughput: int = field(default=2)
@@ -165,6 +169,10 @@ class OptConfig:
     use_SH_allocation: bool = field(default=False)
     patience: Optional[PatienceConfig] = field(default_factory=lambda: PatienceConfig(0.01,0.01,0.01,5))
     frac: float = field(default=1.0)
+    use_HB_allocation: bool = field(default=False)
+    use_SH_allocation: bool = field(default=False)
+    prune_rate: int = field(default=2)
+    initial_step_budget: int = field(default=8)
 
     def finalize(self):
         if not os.path.exists(self.log_dir):

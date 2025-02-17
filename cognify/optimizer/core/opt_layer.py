@@ -51,6 +51,7 @@ from cognify.optimizer.core.flow import (
 from cognify.optimizer.control_param import SelectedObjectives
 from cognify.optimizer.progress_info import pbar
 from cognify.optimizer.core.common_stats import CommonStats
+from cognify.optimizer.core.sh import SuccessiveHalving
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,21 @@ class OptLayer(OptLayerInterface):
         total_budget = self.top_down_info.opt_config.n_trials
         if total_budget > 0:
             logger.debug(f"Start optimization {self.name} with {total_budget} trials")
+            
+            num_current_trials = len(self.opt_logs)
+            initial_score = self._local_best_score if self._local_best_score is not None else 0.0
+            initial_cost = self._local_lowest_cost if self._local_lowest_cost is not None else 0.0
+            initial_exec_time = self._local_fastest_exec_time if self._local_fastest_exec_time is not None else 0.0
+
+            if self.hierarchy_level == 0:
+                pbar.init_pbar(
+                    total=float(num_current_trials + total_budget),
+                    initial=float(num_current_trials),
+                    initial_score=initial_score,
+                    initial_cost=initial_cost,
+                    initial_exec_time=initial_exec_time,
+                    opt_cost=self.opt_cost
+                )
             
             self._optimize()
             
@@ -738,23 +754,8 @@ class OptLayer(OptLayerInterface):
         return self._converged
             
         
-    def _optimize(self):
+    def _optimize_normal(self):
         opt_config = self.top_down_info.opt_config
-        num_current_trials = len(self.opt_logs)
-
-        initial_score = self._local_best_score if self._local_best_score is not None else 0.0
-        initial_cost = self._local_lowest_cost if self._local_lowest_cost is not None else 0.0
-        initial_exec_time = self._local_fastest_exec_time if self._local_fastest_exec_time is not None else 0.0
-
-        if self.hierarchy_level == 0:
-            pbar.init_pbar(
-                total=float(num_current_trials + opt_config.n_trials),
-                initial=float(num_current_trials),
-                initial_score=initial_score,
-                initial_cost=initial_cost,
-                initial_exec_time=initial_exec_time,
-                opt_cost=self.opt_cost
-            )
         
         with ThreadPoolExecutor(max_workers=opt_config.throughput) as executor:
             futures = [
@@ -785,6 +786,76 @@ class OptLayer(OptLayerInterface):
                     log_id, result = f.result()
                     if result and result.complete:
                         self._save_ckpt()
+                        
+    def _optimize_SH(self):
+        opt_config = self.top_down_info.opt_config
+        
+        bucket_size = opt_config.throughput
+        n_bucket_iter = math.ceil(opt_config.n_trials / bucket_size)
+        for i in range(n_bucket_iter):
+            # prepare bucket
+            w = min(bucket_size, opt_config.n_trials - i * bucket_size)
+            proposals = [self._propose() for _ in range(w)]
+            next_layer_tdis = []
+            for _, program, new_trace, log_id in proposals:
+                next_layer_tdis.append(self._prepare_eval_task(program, new_trace, log_id))
+            
+            # optimize with SH
+            _sh_routine = SuccessiveHalving(
+                prune_rate=opt_config.prune_rate,
+                # num_SH_iter=len(next_layer_tdis), # simple heuristic to allow exhaustive search
+                num_SH_iter=opt_config.prune_rate, # follow paper
+                initial_step_budget=opt_config.initial_step_budget,
+                hierarchy_level=self.hierarchy_level,
+                next_layer_factory=self.next_layer_factory,
+                selected_runs=next_layer_tdis,
+            )
+            eval_results, buget_hist = _sh_routine.execute()
+            converged = False
+            for (trial, _, _, log_id), eval_result in zip(proposals, eval_results):
+                self._update(trial, eval_result, log_id)
+                if eval_result and eval_result.complete:
+                    pbar.update_status(self._local_best_score, self._local_lowest_cost, self._local_fastest_exec_time, self.opt_cost)
+                    self._save_ckpt()
+                    converged = converged or self.if_early_stop(eval_result)
+            if converged:
+                break
+    
+    def _optimize_HB(self):
+        opt_config = self.top_down_info.opt_config
+        
+        s_max = int(math.log(opt_config.initial_step_budget, opt_config.prune_rate))
+        for s in range(s_max, -1, -1):
+            bucket_size = int((s_max + 1) / (s + 1) * opt_config.prune_rate ** s)
+            # prepare bucket
+            proposals = [self._propose() for _ in range(bucket_size)]
+            next_layer_tdis = []
+            for _, program, new_trace, log_id in proposals:
+                next_layer_tdis.append(self._prepare_eval_task(program, new_trace, log_id))
+            initial_budget = int(opt_config.initial_step_budget * opt_config.prune_rate ** -s)
+            _sh_routine = SuccessiveHalving(
+                prune_rate=opt_config.prune_rate,
+                num_SH_iter=s+1,
+                initial_step_budget=initial_budget,
+                hierarchy_level=self.hierarchy_level,
+                next_layer_factory=self.next_layer_factory,
+                selected_runs=next_layer_tdis,
+            )
+            eval_results, buget_hist = _sh_routine.execute()
+            for (trial, _, _, log_id), eval_result in zip(proposals, eval_results):
+                self._update(trial, eval_result, log_id)
+                if eval_result and eval_result.complete:
+                    pbar.update_status(self._local_best_score, self._local_lowest_cost, self._local_fastest_exec_time, self.opt_cost)
+                    self._save_ckpt()
+                        
+    def _optimize(self):
+        opt_config = self.top_down_info.opt_config
+        if opt_config.use_HB_allocation:
+            self._optimize_HB()
+        elif opt_config.use_SH_allocation:
+            self._optimize_SH()
+        else:
+            self._optimize_normal()
     
     def easy_optimize(
         self,
