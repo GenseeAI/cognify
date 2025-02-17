@@ -461,7 +461,7 @@ class OptLayer(OptLayerInterface):
             )
 
         new_study = optuna.create_study(
-            directions=optimize_directions,
+            directions=CommonStats.objectives.get_optimization_directions(),
             sampler=sampler,
         )
 
@@ -664,7 +664,7 @@ class OptLayer(OptLayerInterface):
         score, price, exec_time = eval_result.reduced_score, eval_result.reduced_price, eval_result.reduced_exec_time
         with self._study_lock:
             self._add_constraint(score, trial)
-            frozen_trial = self.study.tell(trial, [score, price, exec_time])
+            frozen_trial = self.study.tell(trial, CommonStats.objectives.select_from[score, price, exec_time])
             is_evolved = False
             for params in self.params.values():
                 for param in params:
