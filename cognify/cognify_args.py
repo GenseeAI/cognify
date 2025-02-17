@@ -94,6 +94,7 @@ class EvaluationArgs(CommonArgs):
     def add_cli_args(parser: argparse.ArgumentParser):
         CommonArgs.add_cli_args(parser)
         parser.add_argument(
+            "-s",
             "--select",
             type=str,
             required=True,

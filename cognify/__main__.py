@@ -66,7 +66,7 @@ def optimize_routine(opt_args: OptimizationArgs):
 
     trace_workflow(opt_args.workflow)
 
-    cost, frontier, opt_logs = optimize(
+    frontier = optimize(
         script_path=opt_args.workflow,
         control_param=control_param,
         train_set=train_set,
@@ -76,7 +76,7 @@ def optimize_routine(opt_args: OptimizationArgs):
         resume=opt_args.resume,
         force=opt_args.force,
     )
-    return cost, frontier, opt_logs
+    return frontier
 
 
 def evaluate_routine(eval_args: EvaluationArgs):

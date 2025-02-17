@@ -172,8 +172,8 @@ def optimize(
         base_exec_time=raw_result.reduced_exec_time
     )
 
-    cost, pareto_frontier, opt_logs = opt_driver.run(
+    pareto_frontier = opt_driver.run(
         evaluator=evaluator,
         script_path=script_path,
     )
-    return cost, pareto_frontier, opt_logs
+    return pareto_frontier

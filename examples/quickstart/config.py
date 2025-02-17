@@ -40,6 +40,7 @@ def load_data_minor():
 from cognify.hub.search import default
 
 search_settings = default.create_search(
-    search_type='medium',
-    n_trials=30,
+    search_type='light',
+    n_trials=5,
+    evaluator_batch_size=10,
 )

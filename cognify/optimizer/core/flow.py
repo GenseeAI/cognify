@@ -4,13 +4,14 @@ from typing import Optional, Tuple, Type, Iterable
 import logging
 from collections import defaultdict
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 
 from cognify.graph.program import Module
 from cognify.hub.cogs.common import CogBase
 from cognify.hub.cogs.utils import build_param
 from cognify.optimizer.plugin import capture_module_from_fs
 from cognify.optimizer.registry import get_registered_opt_modules
+from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -174,10 +175,27 @@ class OptConfig:
             self.param_save_path = os.path.join(self.log_dir, "opt_params.json")
 
     def update(self, other: "OptConfig"):
-        # for all not None fields in other, update self
-        for key, value in other.__dict__.items():
-            if value is not None:
-                setattr(self, key, value)
+        # for all None fields in self, update from other
+        for f in fields(other):
+            if getattr(self, f.name) is None:
+                setattr(self, f.name, getattr(other, f.name))
+                
+    
+    @classmethod
+    def _set_log_dir_for_next(cls, log_dir: str):
+        # set other fields to None so that the next layer can populate
+        return cls(
+            n_trials=None,
+            throughput=None,
+            log_dir=log_dir,
+            evolve_interval=None,
+            opt_log_path=None,
+            param_save_path=None,
+            frugal_eval_cost=None,
+            use_SH_allocation=None,
+            patience=None,
+            frac=None,
+        )
 
 @dataclass
 class TopDownInformation:
@@ -203,7 +221,12 @@ class TopDownInformation:
         default_factory=list
     )  # series of [layer_name_trial_id]
 
-    def initialize(self):
+    def initialize(self, ori_opt_config: OptConfig):
+        if self.opt_config is None:
+            self.opt_config = ori_opt_config
+        else:
+            self.opt_config.update(ori_opt_config)
+        
         self.opt_config.finalize()
         self.all_params = self.all_params or {}
         self.script_args = self.script_args or []
@@ -228,24 +251,29 @@ class TrialLog:
         self,
         params: dict[str, any],
         bo_trial_id: int,
-        id: str = None,
+        id: str,
+        layer_name: str,
         score: float = 0.0,
         price: float = 0.0,
         exec_time: float = 0.0,
         eval_cost: float = 0.0,
         finished: bool = False,
+        eval_task_dict: dict = None,
     ):
-        self.id: str = id or uuid.uuid4().hex
+        self.id: str = id
         self.params = params
         self.bo_trial_id = bo_trial_id
+        self.layer_name = layer_name
         self.score = score
         self.price = price
         self.exec_time = exec_time
         self.eval_cost = eval_cost
+        self.eval_task_dict = eval_task_dict
         self.finished = finished
 
     def to_dict(self):
         return {
+            "layer_name": self.layer_name,
             "id": self.id,
             "bo_trial_id": self.bo_trial_id,
             "params": self.params,
@@ -253,13 +281,21 @@ class TrialLog:
             "price": self.price,
             "exec_time": self.exec_time,
             "eval_cost": self.eval_cost,
+            "eval_task_dict": self.eval_task_dict,
             "finished": self.finished,
         }
+    
+    def update_result(self, result):
+        self.score = result.reduced_score
+        self.price = result.reduced_price
+        self.exec_time = result.reduced_exec_time
+        self.eval_cost = result.total_eval_cost
+        self.finished = True
 
     @classmethod
     def from_dict(cls, data):
         return cls(**data)
-
+    
 
 class LayerConfig:
     def __init__(
