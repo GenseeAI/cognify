@@ -254,57 +254,6 @@ class TopDownInformation:
         self.module_ttrace.mflatten()
 
 
-class TrialLog:
-    def __init__(
-        self,
-        params: dict[str, any],
-        bo_trial_id: int,
-        id: str,
-        layer_name: str,
-        score: float = 0.0,
-        price: float = 0.0,
-        exec_time: float = 0.0,
-        eval_cost: float = 0.0,
-        finished: bool = False,
-        eval_task_dict: dict = None,
-    ):
-        self.id: str = id
-        self.params = params
-        self.bo_trial_id = bo_trial_id
-        self.layer_name = layer_name
-        self.score = score
-        self.price = price
-        self.exec_time = exec_time
-        self.eval_cost = eval_cost
-        self.eval_task_dict = eval_task_dict
-        self.finished = finished
-
-    def to_dict(self):
-        return {
-            "layer_name": self.layer_name,
-            "id": self.id,
-            "bo_trial_id": self.bo_trial_id,
-            "params": self.params,
-            "score": self.score,
-            "price": self.price,
-            "exec_time": self.exec_time,
-            "eval_cost": self.eval_cost,
-            "eval_task_dict": self.eval_task_dict,
-            "finished": self.finished,
-        }
-    
-    def update_result(self, result):
-        self.score = result.reduced_score
-        self.price = result.reduced_price
-        self.exec_time = result.reduced_exec_time
-        self.eval_cost = result.total_eval_cost
-        self.finished = True
-
-    @classmethod
-    def from_dict(cls, data):
-        return cls(**data)
-    
-
 class LayerConfig:
     def __init__(
         self,

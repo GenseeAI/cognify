@@ -8,7 +8,6 @@ from typing import (
     Callable
 )
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import copy
 import logging
 import optuna
@@ -21,9 +20,7 @@ from concurrent.futures import (
 import threading
 import traceback
 import math
-from concurrent.futures import Future
 
-from cognify.optimizer.utils import _report_cost_reduction, _report_quality_impv, _report_latency_reduction
 from cognify._signal import _should_exit
 from cognify.graph.program import Module
 from cognify.hub.cogs.common import (
@@ -43,13 +40,13 @@ from optuna.samplers import TPESampler, _base
 from optuna.trial import TrialState, FrozenTrial
 from cognify.optimizer.bo.tpe import FrugalTPESampler
 from cognify.optimizer.core.flow import (
-    TrialLog,
     ModuleTransformTrace,
     TopDownInformation,
     OptConfig,
 )
 from cognify.optimizer.control_param import SelectedObjectives
-from cognify.optimizer.progress_info import pbar
+from cognify.optimizer.trace.progress_info import pbar
+from cognify.optimizer.trace.checkpoint import LogManager, TrialLog
 from cognify.optimizer.core.common_stats import CommonStats
 from cognify.optimizer.core.sh import SuccessiveHalving
 
@@ -78,8 +75,6 @@ class OptLayerInterface(GeneralEvaluatorInterface):
     next_layer_factory: Callable[[], GeneralEvaluatorInterface]
     is_leaf: bool
     
-    opt_logs: dict[str, TrialLog]
-
     @abstractmethod
     def _setup_opt_env(self):
         ...
@@ -147,32 +142,6 @@ class OptLayerInterface(GeneralEvaluatorInterface):
         frontier = self.optimize(tdi)
         return self._summarize_to_eval_result(frontier)
 
-def get_pareto_front(candidates: list[TrialLog]) -> list[TrialLog]:
-    """Find the pareto-efficient points
-
-    This function will not filter with constraints
-    """
-    if not candidates:
-        return []
-    score_cost_time_list = []
-    for trial_log in candidates:
-        score_cost_time_list.append((trial_log.score, trial_log.price, trial_log.exec_time))
-
-    vectors = np.array([CommonStats.objectives.select_from(-score, price, exec_time) for score, price, exec_time in score_cost_time_list])
-    is_efficient = np.ones(vectors.shape[0], dtype=bool)
-    for i, v in enumerate(vectors):
-        if is_efficient[i]:
-            is_efficient[is_efficient] = np.any(
-                vectors[is_efficient] < v, axis=1
-            )  # Keep any point with a lower cost
-            is_efficient[i] = True  # And keep self
-
-    # return filtered [T_ParetoProgram]
-    pareto_frontier = [
-        log for log, eff in zip(candidates, is_efficient) if eff
-    ]
-    return pareto_frontier
-
     
 class OptLayer(OptLayerInterface):
     def __init__(
@@ -218,13 +187,8 @@ class OptLayer(OptLayerInterface):
         )
         self.study: optuna.study.Study = None
         self._study_lock: threading.Lock = None
-        self._local_best_score = None
-        self._local_lowest_cost = None
-        self._local_fastest_exec_time = None
         self._patience_budget = None if self.opt_config.patience is None else self.opt_config.patience.n_iterations
         self._converged = False
-        self.opt_cost = 0
-        self.opt_logs = {}
         
         self.hierarchy_level = hierarchy_level
         self.next_layer_factory = next_layer_factory
@@ -238,6 +202,14 @@ class OptLayer(OptLayerInterface):
         if current_tdi.opt_config.patience is not None:
             self._patience_budget = current_tdi.opt_config.patience.n_iterations
         self._setup_opt_env()
+        
+        self._bo_instance = ".".join(self.top_down_info.trace_back + [self.name])
+        LogManager().register_layer(
+            layer_name=self.name,
+            layer_instance=self._bo_instance,
+            opt_log_path=self.top_down_info.opt_config.opt_log_path,
+            is_leaf=self.is_leaf,
+        )
 
         # load previous optimization logs if exists
         opt_log_path = self.top_down_info.opt_config.opt_log_path
@@ -249,66 +221,23 @@ class OptLayer(OptLayerInterface):
         if total_budget > 0:
             logger.debug(f"Start optimization {self.name} with {total_budget} trials")
             
-            num_current_trials = len(self.opt_logs)
-            initial_score = self._local_best_score if self._local_best_score is not None else 0.0
-            initial_cost = self._local_lowest_cost if self._local_lowest_cost is not None else 0.0
-            initial_exec_time = self._local_fastest_exec_time if self._local_fastest_exec_time is not None else 0.0
-
-            if self.hierarchy_level == 0:
-                pbar.init_pbar(
-                    total=float(num_current_trials + total_budget),
-                    initial=float(num_current_trials),
-                    initial_score=initial_score,
-                    initial_cost=initial_cost,
-                    initial_exec_time=initial_exec_time,
-                    opt_cost=self.opt_cost
-                )
-            
             self._optimize()
             
             logger.debug(f"Optimization {self.name} finished")
             self._save_ckpt()
-        result = self._get_layer_opt_result()
-        return result
-    
-    def _get_layer_opt_result(self):
-        # Analysis optimization result
-        candidates = self.get_all_candidates()
-        pareto_frontier = get_pareto_front(candidates=candidates)
-        if self.hierarchy_level == 0:
-            _log_optimization_results(pareto_frontier)
-        return pareto_frontier
+        frontier = LogManager().layer_stats[self._bo_instance].get_opt_summary()
+        return frontier
         
     def _save_ckpt(self):
-        # save opt logs
-        opt_logs_json_obj = {}
-        for k, v in self.opt_logs.items():
-            if v.finished:
-                opt_logs_json_obj[k] = v.to_dict()
-        if not opt_logs_json_obj:
-            logger.warning("No finished trials to save")
-            return
-        json.dump(opt_logs_json_obj, open(self.top_down_info.opt_config.opt_log_path, "w+"), indent=4)
-        params = [param for params in self.params.values() for param in params]
+        """Save current observations
+        """
+        # save config logs
+        LogManager().layer_stats[self._bo_instance].save_opt_logs()
         
         # save search space in case evolving params 
         params = [param for params in self.params.values() for param in params]
         dump_params(params, self.top_down_info.opt_config.param_save_path)
-
         
-    def get_all_candidates(self):
-        cancidates = []
-        for log_id, log in self.opt_logs.items():
-            if not log.finished:
-                continue
-            # if not meet the quality constraint, skip
-            if (
-                CommonStats.quality_constraint is not None
-                and log.score < CommonStats.quality_constraint
-            ):
-                continue
-            cancidates.append(log)
-        return cancidates
     
     def add_constraint(self, score, trial: optuna.trial.Trial):
         # Soft constraint, if score is lower than the quality constraint, reject it
@@ -319,29 +248,22 @@ class OptLayer(OptLayerInterface):
             # trial.set_system_attr(_base._CONSTRAINTS_KEY, constraint_result)
         
     def _load_opt_ckpt(self):
+        """Populate BO with existing observations
+        """
         # Load logs from file
-        with open(self.top_down_info.opt_config.opt_log_path, "r") as f:
-            opt_trace = json.load(f)
-        for trial_log_id, trial_meta in opt_trace.items():
-            trial_log = TrialLog.from_dict(trial_meta)
-            self.opt_logs[trial_log_id] = trial_log
-            self.opt_cost += trial_log.eval_cost
-            
-        candidates = self.get_all_candidates()
-        if candidates:
-            self._local_best_score = max([log.score for log, _ in candidates])
-            self._local_lowest_cost = min([log.price for log, _ in candidates])
-            self._local_fastest_exec_time = min([log.exec_time for log, _ in candidates])
+        opt_logs = LogManager().load_existing_logs(self._bo_instance)
         
-        for trial_log_id, trial_log in self.opt_logs.items():
-            assert trial_log.finished, f"Trial {trial_log_id} is not finished"
+        # Add to optuna study
+        for trial_log_id, trial_log in opt_logs.items():
+            assert trial_log.result.complete, f"Trial {trial_log_id} is not finished"
+            score, price, exec_time = trial_log.result.reduced_score, trial_log.result.reduced_price, trial_log.result.reduced_exec_time
             trial = optuna.trial.create_trial(
                 params=trial_log.params,
-                values=CommonStats.objectives.select_from(trial_log.score, trial_log.price, trial_log.exec_time),
+                values=CommonStats.objectives.select_from(score, price, exec_time),
                 distributions=self._search_space,
             )
             if CommonStats.quality_constraint is not None:
-                self.add_constraint(trial_log.score, trial)
+                self.add_constraint(score, trial)
                 trial.set_system_attr(
                     _base._CONSTRAINTS_KEY, get_quality_constraint(trial)
                 )
@@ -368,9 +290,9 @@ class OptLayer(OptLayerInterface):
         inner_log_ids, scores, prices, exec_times = [], [], [], []
         for trial_log, _ in pareto_frontier:
             inner_log_ids.append(trial_log.id)
-            scores.append(trial_log.score)
-            prices.append(trial_log.price)
-            exec_times.append(trial_log.exec_time)
+            scores.append(trial_log.result.reduced_score)
+            prices.append(trial_log.result.reduced_price)
+            exec_times.append(trial_log.result.reduced_exec_time)
 
         reduced_score = max(scores)
         reduced_price = min(prices)
@@ -380,7 +302,7 @@ class OptLayer(OptLayerInterface):
             scores=scores,
             prices=prices,
             exec_times=exec_times,
-            total_eval_cost=self.opt_cost,
+            total_eval_cost=LogManager().layer_stats[self._bo_instance].opt_cost,
             complete=True,
             reduced_score=reduced_score,
             reduced_price=reduced_price,
@@ -566,39 +488,17 @@ class OptLayer(OptLayerInterface):
                 new_modules.append(new_module)
         return new_modules, trace_for_next_level
     
-    def generate_trial_id(self) -> tuple[str, int]:
-        """Get the next trial id
-        
-        Optuna trial id start from num_trials, if previous run is interrupted
-        so using optuna trial number will have conflict
-        
-        here we always increment the trial number
-        """
-        with self._study_lock:
-            max_id = None
-            for log in self.opt_logs.values():
-                id = int(log.id.split("_")[-1])
-                max_id = id if max_id is None else max(max_id, id)
-        new_trial_number = max_id + 1 if max_id is not None else 0
-        return ".".join(
-            self.top_down_info.trace_back + [f"{self.name}_{new_trial_number}"]
-        )
-
     def _propose(self):
         with self._study_lock:
             trial = self.study.ask(self._search_space)
+            trial_id = LogManager().add_trial(self._bo_instance, trial.params)
 
         logger.debug(
-            f"- {self.name} - apply param - Trial {trial.number} params: {trial.params}"
+            f"- {self.name} - Trial {trial_id} apply params: {trial.params}"
         )
         
-        trial_id_str = self.generate_trial_id()
-        trial_log = TrialLog(
-            params=trial.params, bo_trial_id=trial.number, id=trial_id_str, layer_name=self.name
-        )
         new_program, new_trace = self._apply_params(trial.params)
-        self.opt_logs[trial_id_str] = trial_log
-        return trial, new_program, new_trace, trial_id_str
+        return trial, new_program, new_trace, trial_id
     
     def _get_new_python_paths(self):
         new_python_paths = []
@@ -660,11 +560,6 @@ class OptLayer(OptLayerInterface):
             # NOTE: add system attr at loading time
             # trial.set_system_attr(_base._CONSTRAINTS_KEY, constraint_result)
             
-    def get_finished_bo_trials(self, need_copy: bool) -> list[FrozenTrial]:
-        states_of_interest = (TrialState.COMPLETE,)
-        return self.study.get_trials(deepcopy=need_copy, states=states_of_interest)
-    
-
     def _update(
         self,
         trial: optuna.trial.Trial,
@@ -674,39 +569,53 @@ class OptLayer(OptLayerInterface):
         # if eval is interrupted, the result will not be used
         if not eval_result.complete:
             return
+        
+        # set convergence flag before update local best metrics
+        self.if_early_stop(eval_result)
 
         # update study if any dynamic params can evolve
-        self.opt_logs[trial_log_id].update_result(eval_result)
         score, price, exec_time = eval_result.reduced_score, eval_result.reduced_price, eval_result.reduced_exec_time
         with self._study_lock:
+            # report result
+            LogManager().report_trial_result(self._bo_instance, trial_log_id, eval_result)
             self._add_constraint(score, trial)
-            frozen_trial = self.study.tell(trial, CommonStats.objectives.select_from[score, price, exec_time])
-            is_evolved = False
-            for params in self.params.values():
-                for param in params:
-                    if isinstance(param, DynamicCogBase):
-                        evolve_type = param.evolve(eval_result)
-                        if evolve_type != EvolveType.ID:
-                            is_evolved = True
-            if is_evolved:
-                # update param dist
-                self._search_space = {
-                    param.hash: optuna.distributions.CategoricalDistribution(
-                        list(param.options.keys())
-                    )
-                    for _, params in self.params.items()
-                    for param in params
-                }
-                # create new study and migrate all trials
-                new_study = self.init_study(self.study)
-                self.study = new_study
+            frozen_trial = self.study.tell(trial, CommonStats.objectives.select_from(score, price, exec_time))
+            
+            # evolve dynamic cogs
+            num_existing_trials = LogManager().num_trials(self._bo_instance, finished=True)
+            if (
+                num_existing_trials > 0 and
+                num_existing_trials % self.opt_config.evolve_interval == 0
+            ):
+                logger.debug(
+                    f"Evolve dynamic params for {self.name} after {num_existing_trials} trials"
+                )
+                is_evolved = False
+                for params in self.params.values():
+                    for param in params:
+                        if isinstance(param, DynamicCogBase):
+                            evolve_type = param.evolve(eval_result)
+                            if evolve_type != EvolveType.ID:
+                                is_evolved = True
+                if is_evolved:
+                    # update param dist
+                    self._search_space = {
+                        param.hash: optuna.distributions.CategoricalDistribution(
+                            list(param.options.keys())
+                        )
+                        for _, params in self.params.items()
+                        for param in params
+                    }
+                    # create new study and migrate all trials
+                    new_study = self.init_study(self.study)
+                    self.study = new_study
 
     def _optimize_iteration(self):
         next_trial, program, new_trace, log_id = self._propose()
         next_level_info = self._prepare_eval_task(program, new_trace, log_id)
         if self.is_leaf:
             next_level_info = EvalTask.from_top_down_info(next_level_info)
-            self.opt_logs[log_id].eval_task_dict = next_level_info.to_dict()
+            LogManager().layer_stats[self._bo_instance].opt_logs[log_id].eval_task_dict = next_level_info.to_dict()
 
         if _should_exit():
             return None, None
@@ -727,24 +636,28 @@ class OptLayer(OptLayerInterface):
     def if_early_stop(self, result: EvaluationResult):
         if self.top_down_info.opt_config.patience is None:
             return False
+        if self._converged:
+            return True
         if not result.complete:
             self._patience_budget -= 1
             self._converged = self._patience_budget <= 0
             return self._converged
+        
         impv = False
         score_threshold = self.top_down_info.opt_config.patience.quality_min_delta
         cost_threshold = self.top_down_info.opt_config.patience.cost_min_delta
         time_threshold = self.top_down_info.opt_config.patience.exec_time_min_delta
+        best_score, lowest_cost, fastest_exec_time = LogManager().layer_stats[self._bo_instance].best_metrics_so_far
         # reset budget if any dimension is improved
-        if self._local_best_score is None or result.reduced_score >= self._local_best_score * (1 + score_threshold):
-            self._local_best_score = result.reduced_score
-            impv = True
-        if self._local_lowest_cost is None or result.reduced_price <= self._local_lowest_cost * (1 - cost_threshold):
-            self._local_lowest_cost = result.reduced_price
-            impv = True
-        if self._local_fastest_exec_time is None or result.reduced_exec_time <= self._local_fastest_exec_time * (1 - time_threshold):
-            self._local_fastest_exec_time = result.reduced_exec_time
-            impv = True
+        if CommonStats.objectives.quality:
+            if best_score is None or result.reduced_score >= best_score * (1 + score_threshold):
+                impv = True
+        if CommonStats.objectives.cost:
+            if lowest_cost is None or result.reduced_price <= lowest_cost * (1 - cost_threshold):
+                impv = True
+        if CommonStats.objectives.latency:
+            if fastest_exec_time is None or result.reduced_exec_time <= fastest_exec_time * (1 - time_threshold):
+                impv = True
         if impv:
             self._patience_budget = self.top_down_info.opt_config.patience.n_iterations
         else:
@@ -767,10 +680,9 @@ class OptLayer(OptLayerInterface):
                 try:
                     log_id, result = f.result()
                     if result and result.complete:
-                        pbar.update_status(self._local_best_score, self._local_lowest_cost, self._local_fastest_exec_time, self.opt_cost)
                         self._save_ckpt()
                         visited.add(f)
-                        if self.if_early_stop(result):
+                        if self._converged:
                             executor.shutdown(wait=False, cancel_futures=True)
                             pbar.finish()
                             break
@@ -811,14 +723,11 @@ class OptLayer(OptLayerInterface):
                 selected_runs=next_layer_tdis,
             )
             eval_results, buget_hist = _sh_routine.execute()
-            converged = False
             for (trial, _, _, log_id), eval_result in zip(proposals, eval_results):
                 self._update(trial, eval_result, log_id)
                 if eval_result and eval_result.complete:
-                    pbar.update_status(self._local_best_score, self._local_lowest_cost, self._local_fastest_exec_time, self.opt_cost)
                     self._save_ckpt()
-                    converged = converged or self.if_early_stop(eval_result)
-            if converged:
+            if self._converged:
                 break
     
     def _optimize_HB(self):
@@ -845,10 +754,16 @@ class OptLayer(OptLayerInterface):
             for (trial, _, _, log_id), eval_result in zip(proposals, eval_results):
                 self._update(trial, eval_result, log_id)
                 if eval_result and eval_result.complete:
-                    pbar.update_status(self._local_best_score, self._local_lowest_cost, self._local_fastest_exec_time, self.opt_cost)
                     self._save_ckpt()
+            if self._converged:
+                break
                         
     def _optimize(self):
+        if self.hierarchy_level == 0:
+            num_current_trials = LogManager().num_trials(self._bo_instance, finished=True)
+            num_total_trials = self.top_down_info.opt_config.n_trials + num_current_trials
+            LogManager().init_progress_bar(num_total_trials, num_current_trials)
+        
         opt_config = self.top_down_info.opt_config
         if opt_config.use_HB_allocation:
             self._optimize_HB()
@@ -873,31 +788,7 @@ class OptLayer(OptLayerInterface):
             other_python_paths=other_python_paths,
         )
         
-        return self.optimize(tdi)
+        self.optimize(tdi)
+        opt_cost, pareto_frontier, finished_trials = LogManager().get_global_summary(verbose=True)
+        return opt_cost, pareto_frontier, finished_trials
     
-def _log_optimization_results(pareto_frontier: list[TrialLog]):
-    print(f"================ Optimization Results =================")
-    print(f"Optimized for: {str(CommonStats.objectives)}")
-
-    if len(pareto_frontier) == 0:
-        print("Based on current optimization parameters, the best solution is the original workflow.")
-        print("We recommend increasing the number of trials or relaxing constraints.")
-    else:
-        print(f"Number of Optimized Workflows Generated: {len(pareto_frontier)}")
-
-    for i, trial_log in enumerate(pareto_frontier):
-        print("--------------------------------------------------------")
-        print("Optimization_{}".format(i + 1))
-        # logger.info("  Params: {}".format(trial_log.params))
-        if CommonStats.base_quality is not None:
-            print("  Quality improvement: {:.0f}%".format(_report_quality_impv(trial_log.score, CommonStats.base_quality)))
-        if CommonStats.base_price is not None:
-            print("  Cost: {:.2f}x original".format(_report_cost_reduction(trial_log.price, CommonStats.base_price)))
-        if CommonStats.base_exec_time is not None:
-            print("  Execution time: {:.2f}x original".format(_report_latency_reduction(trial_log.exec_time, CommonStats.base_exec_time)))
-        print("  Quality: {:.2f}, Cost per 1K invocation: ${:.2f}, Execution time: {:.2f}s".format(trial_log.score, trial_log.price * 1000, trial_log.exec_time))
-            # print("  Applied at: {}".format(trial_log.id))
-            # logger.info("  config saved at: {}".format(log_path))
-
-        # logger.info("Opt Cost: {}".format(self.opt_cost))
-        print("========================================================")

@@ -21,7 +21,6 @@ from cognify.hub.cogs.common import CogBase
 from cognify.hub.cogs.utils import build_param
 from cognify.optimizer.plugin import OptimizerSchema, capture_module_from_fs
 from cognify.optimizer.core.flow import TopDownInformation, ModuleTransformTrace
-from cognify.optimizer.progress_info import pbar
 
 from termcolor import colored
 
@@ -512,6 +511,7 @@ class EvaluatorPlugin(GeneralEvaluatorInterface):
             worker.start()
             all_workers.append(worker)
 
+        from cognify.optimizer.trace.progress_info import pbar
         for i in tqdm(range(len(all_workers)),
                     colour='green',
                     leave=False,
