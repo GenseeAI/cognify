@@ -82,7 +82,7 @@ from cognify.hub.search import default
 model_configs = [
     # OpenAI models
     cognify.LMConfig(model='gpt-4o-mini', kwargs={'temperature': 0, 'max_tokens': 300}),
-    cognify.LMConfig(model='gpt-4o', kwargs={'temperature': 0, 'max_tokens': 300}),
+    # cognify.LMConfig(model='gpt-4o', kwargs={'temperature': 0, 'max_tokens': 300}),
 ]
 
 search_settings = default.create_search(

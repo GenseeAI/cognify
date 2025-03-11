@@ -113,12 +113,16 @@ class ControlParameter:
 
         # prioritize param_path if given
         if param_path is not None:
+            # print('param')
+            # print(param_path)
             if param_path.endswith(".py"):
                 control_param = ControlParameter.from_python_profile(param_path)
             else:
                 control_param = ControlParameter.from_json_profile(param_path)
             return control_param
         else:
+            # print('model')
+            # print(loaded_module)
             for name in dir(loaded_module):
                 obj = getattr(loaded_module, name)
                 if isinstance(obj, cls):

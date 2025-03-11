@@ -5,7 +5,7 @@ from cognify.optimizer.core import driver, flow
 from cognify.hub.cogs import reasoning, ensemble, model_selection
 from cognify.hub.cogs.common import NoChange
 from cognify.hub.cogs.fewshot import LMFewShot
-from cognify.hub.cogs.reasoning import ZeroShotCoT, PlanBefore
+from cognify.hub.cogs.reasoning import *
 from cognify.optimizer.control_param import ControlParameter, SelectedObjectives
 from dataclasses import dataclass
 
@@ -19,6 +19,36 @@ class SearchParams:
     evaluator_batch_size: int = 10
     opt_log_dir: str = "opt_results"
     model_selection_cog: model_selection.LMSelection = None
+
+
+def create_testOpt_search(search_params: SearchParams) -> ControlParameter:
+    # Reasoning Parameter
+    reasoning_param = reasoning.LMReasoning([DebateReflection()])
+    # Few Shot Parameter
+    few_shot_params = LMFewShot(2)
+
+    # Layer Config
+    inner_opt_config = flow.OptConfig(
+        n_trials=search_params.n_trials,
+    )
+    params = [reasoning_param] # for unit test, light layer config - few shot = testOpt reasoning
+    if search_params.model_selection_cog is not None:
+        params.append(search_params.model_selection_cog)
+    inner_loop_config = driver.LayerConfig(
+        layer_name="light_opt_layer",
+        universal_params=params,
+        opt_config=inner_opt_config,
+    )
+
+    # ================= Overall Control Parameter =================
+    optimize_control_param = ControlParameter(
+        opt_layer_configs=[inner_loop_config],
+        objectives=search_params.objectives,
+        opt_history_log_dir=search_params.opt_log_dir,
+        evaluator_batch_size=search_params.evaluator_batch_size,
+        quality_constraint=search_params.quality_constraint,
+    )
+    return optimize_control_param
 
 
 def create_light_search(search_params: SearchParams) -> ControlParameter:
@@ -212,7 +242,8 @@ def create_search(
     
     if n_trials is None:
         if search_type == "light":
-            n_trials = 10
+            # n_trials = 10
+            n_trials = 1 # for manual unit test
         elif search_type == "medium":
             n_trials = 45
         elif search_type == "heavy":
@@ -234,7 +265,8 @@ def create_search(
     trace_default_search(search_type, quality_constraint, list(set(objectives)))
 
     if search_type == "light":
-        return create_light_search(search_params)
+        #return create_light_search(search_params) 
+        return create_testOpt_search(search_params) # for manual unit test
     elif search_type == "medium":
         return create_medium_search(search_params)
     elif search_type == "heavy":
