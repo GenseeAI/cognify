@@ -6,10 +6,10 @@
 | <a href="https://cognify-ai.readthedocs.io/en/latest/user_guide/quickstart.html"><b>Quickstart</b></a> | <a href="https://cognify-ai.readthedocs.io/en/latest/index.html"><b>Documentation</b></a> | <a href="https://arxiv.org/abs/2502.08056"><b>Research Paper</b></a> | <a href="https://mlsys.wuklab.io/posts/cognify/"><b>Blog</b></a> | <a href="https://discord.gg/8TSFeZA3V6"><b>Discord</b></a> | <a href="https://forms.gle/Be3MD3pGPpZaUmrVA"><b>Send Feedback</b></a> | 
 </p>
 
-# Automated, Multi-Faceted Gen-AI Workflow Optimization
+# Multi-Faceted Gen-AI Workflow Autotuning
 
 Building high-quality, cost-effective generative-AI (gen-AI) applications is challenging due to the absence of systematic methods for tuning, testing, and optimizing them. 
-We introduce **Cognify**, a tool that automatically enhances generation quality, decreases execution latency, and reduces execution monetary costs for gen-AI workflows, including those written with LangChain, DSPy, and annotated Python. 
+We introduce **Cognify**, a tool that automatically enhances generation quality, decreases execution latency, and reduces execution monetary costs for gen-AI workflows, including those written with LangChain, LangGraph, DSPy, and annotated Python. 
 Built on a novel foundation of hierarchical, workflow-level optimization, Cognify improves workflow **generation quality by up to 2.8x**, reduces execution **cost
 by up to 10x**, and reduces end-to-end **latency by up to 2.7x** compared to original expert-written workflows. 
 
