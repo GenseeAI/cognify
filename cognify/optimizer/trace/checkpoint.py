@@ -92,8 +92,8 @@ def get_pareto_front(candidates: list[TrialLog]) -> list[TrialLog]:
                 trial_log.result.reduced_exec_time
             )
         )
-
-    vectors = np.array(list(map(list, zip(*score_cost_list))))
+    
+    vectors = np.array(score_cost_list)
     is_efficient = np.ones(vectors.shape[0], dtype=bool)
     for i, v in enumerate(vectors):
         if is_efficient[i]:
