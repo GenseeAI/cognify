@@ -11,7 +11,7 @@ In DSPy, the :code:`dspy.Predict` class is the primary abstraction for obtaining
 
 .. tip::
 
-  DSPy also contains other, more detailed modules that don't follow the behavior of :code:`dspy.Predict` (e.g., :code:`dspy.ChainOfThought`). In Cognify, we view Chain-of-Thought prompting (and other similar techniques) as possible optimizations to apply to an LLM call on the fly instead of as pre-defined templates. Hence, during the translation process we will strip the "reasoning" step out of the predictor definition and leave it to the optimizer. 
+  DSPy also contains other, more detailed modules that don't follow the behavior of :code:`dspy.Predict` (e.g., :code:`dspy.ChainOfThought`). In Cognify, we view Chain-of-Thought prompting (and other similar techniques) as possible optimizations to apply to an LLM call on the fly instead of as pre-defined templates.
   
 By default, Cognify will translate **all** predictors into valid optimization targets. For more fine-grained control over which predictors should be targeted for optimization, you can manually wrap your predictor with our :code:`cognify.PredictModel` class like so: 
 
