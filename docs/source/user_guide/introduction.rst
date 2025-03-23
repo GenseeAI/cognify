@@ -41,43 +41,11 @@ We compare Cognify to non-optimized workflows and `DSPy <https://github.com/stan
 - `Data Visualization <https://github.com/thunlp/MatPlotAgent>`_
 - `Text-to-SQL <https://github.com/ShayanTalaei/CHESS>`_
 - `Math solver <https://github.com/hendrycks/math>`_
+- `FinRobot <https://github.com/AI4Finance-Foundation/FinRobot>`_ with datasets from `FinGPT <https://github.com/AI4Finance-Foundation/FinGPT?tab=readme-ov-file>`_
 
-The figures below show the generation quality and execution cost effectiveness (larger the better for both) of these results.
-Cognify pushes the cost-quality Pareto frontier over DSPy and non-optimized workflows across these workloads,
-achieving up to **48%** quality improvements and up to **9x** cost reduction.
+The figures below show the generation quality and execution cost (closer a point to the uppper-left cornor, the better) of these results. Pareto frontiers that represent the best quality-cost trade-offs are connected by dashed lines.
 
-.. grid:: 2
+Overall, Cognify improves these workflows' generation quality by up to **2.8x**, reduces execution monetary cost by up to **10x**.
 
-    .. grid-item-card:: 
-        :img-background: /_static/images/hotpotqa.png
-        :img-alt: HotpotQA workload
-        :link: https://hotpotqa.github.io/ 
-
-    .. grid-item-card::
-        :img-background: /_static/images/hover.png
-        :img-alt: HoVer workload
-        :link: https://github.com/hover-nlp/hover
-
-.. grid:: 2
-
-    .. grid-item-card::
-        :img-background: /_static/images/codegen.png
-        :img-alt: Code Generation workload
-        :link: https://github.com/openai/human-eval
-
-    .. grid-item-card::
-        :img-background: /_static/images/dataviz.png
-        :img-alt: Data Visualization workload
-        :link: https://github.com/thunlp/MatPlotAgent
-
-.. grid:: 2
-    
-    .. grid-item-card::
-        :img-background: /_static/images/chess.png
-        :img-alt: Text-to-SQL workload
-        :link: https://github.com/ShayanTalaei/CHESS
-
-    .. grid-item-card::
-        :img-background: /_static/images/math.png
-        :img-alt: Math Solver workload
-        :link: https://github.com/hendrycks/math
+.. image:: /_static/images/all_quality_cost.png
+   :align: center
