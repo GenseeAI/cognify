@@ -1,6 +1,8 @@
 import argparse
 import logging
 import os
+import multiprocessing as mp
+import dotenv
 
 from cognify.cognify_args import (
     init_cognify_args,
@@ -18,6 +20,7 @@ from cognify.run.inspect import inspect
 from cognify.run.run import run
 from cognify._logging import _configure_logger
 from cognify._tracing import trace_cli_args, trace_workflow, initial_usage_message
+from cognify.rate_limiter import run_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +125,11 @@ def main():
 
     cognify_args = from_cognify_args(raw_args)
 
+    os.environ["_cognify_rate_limit_base_url"] = f"http://127.0.0.1:{raw_args.rate_limit_port}"
+    dotenv.load_dotenv(cognify_args.key_env)
+    rate_limit_process = mp.Process(target=run_rate_limiter, args=(raw_args.rate_limit_port,))
+    rate_limit_process.start()
+
     if raw_args.mode == "optimize" or raw_args.mode == "evaluate":
         workflow_path = cognify_args.workflow
         if not os.path.exists(workflow_path):
@@ -137,6 +145,9 @@ def main():
         run_routine(cognify_args)
     else:
         raise ValueError(f"Unknown mode: {raw_args.mode}")
+    
+    # end rate limiter
+    rate_limit_process.terminate()   
     return
 
 
