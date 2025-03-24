@@ -60,7 +60,7 @@ class PredictModel(dspy.Module):
         if "reasoning" in output_fields:
             # stripping the reasoning field may crash their workflow, so we warn users instead
             warnings.warn(
-                f"DSPy module {name} contained reasoning. This may lead to undefined behavior.", 
+                f"Cognify performs its own reasoning prompt optimization automatically. Consider using `dspy.Predict` for module '{name}' instead of `dspy.ChainOfThought`", 
                 UserWarning,
             )
         system_prompt = prepare_instructions(dspy_predictor.signature)
