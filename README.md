@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-| <a href="https://cognify-ai.readthedocs.io/en/latest/user_guide/quickstart.html"><b>Quickstart</b></a> | <a href="https://cognify-ai.readthedocs.io/en/latest/index.html"><b>Documentation</b></a> | <a href="https://arxiv.org/abs/2502.08056"><b>Research Paper</b></a> | <a href="https://www.gensee.ai/post/auto-tuning-with-cognify-the-secret-to-boosting-your-gen-ai-workflow-quality-by-2-8-times-with-5-i"><b>Blog</b></a> | <a href="https://discord.gg/8TSFeZA3V6"><b>Discord</b></a> | <a href="https://forms.gle/Be3MD3pGPpZaUmrVA"><b>Send Feedback</b></a> | 
+| <a href="https://cognify-ai.readthedocs.io/en/latest/user_guide/quickstart.html"><b>Quickstart</b></a> | <a href="https://cognify-ai.readthedocs.io/en/latest/index.html"><b>Documentation</b></a> | <a href="https://arxiv.org/abs/2502.08056"><b>Research Paper</b></a> | <a href="https://www.gensee.ai/blog"><b>Blog</b></a> | <a href="https://discord.gg/8TSFeZA3V6"><b>Discord</b></a> | <a href="https://forms.gle/Be3MD3pGPpZaUmrVA"><b>Send Feedback</b></a> | 
 </p>
 
 # Multi-Faceted Gen-AI Workflow Autotuning
