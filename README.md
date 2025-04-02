@@ -16,7 +16,7 @@ by up to 10x**, and reduces end-to-end **latency by up to 2.7x** compared to ori
 ## News
 
 - <b>Mar 13, 2025</b>: New blog series (Pt2) deep-diving into how Cognify achieves 2.8x quality improvement with just $5 and 24 minutes available [here](https://www.gensee.ai/post/auto-tuning-with-cognify-the-secret-to-boosting-your-gen-ai-workflow-quality-by-2-8-times-with-5-i-1)
-- <b>Mar 12, 2025</b>: New blog series (Pt2) introducing how Cognify achieves 2.8x quality improvement with just $5 and 24 minutes available [here](https://www.gensee.ai/post/auto-tuning-with-cognify-the-secret-to-boosting-your-gen-ai-workflow-quality-by-2-8-times-with-5-i)
+- <b>Mar 12, 2025</b>: New blog series (Pt1) introducing how Cognify achieves 2.8x quality improvement with just $5 and 24 minutes available [here](https://www.gensee.ai/post/auto-tuning-with-cognify-the-secret-to-boosting-your-gen-ai-workflow-quality-by-2-8-times-with-5-i)
 - <b>Feb 12, 2025</b>: Cognify [research paper](https://arxiv.org/abs/2502.08056) available on arxiv.
 - <b>Nov 25, 2024</b>: Cognify announcement and overview blog post published [here](https://mlsys.wuklab.io/posts/cognify/).
 
