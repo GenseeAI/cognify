@@ -196,3 +196,199 @@ class PlanBefore(ReasonThenFormat):
         )
         response = litellm_completion(model, chat_messages, model_kwargs)
         return [response]
+
+
+class DebateReflection(ReasonThenFormat):
+    def __init__(self):
+        super().__init__("DebateReflection")
+    
+    def _get_cost_indicator(self):
+        return 3.5
+    
+    def describe(self):
+        desc = """
+        - DebateReflection -
+        Creates an internal debate between multiple perspectives before forming a final conclusion.
+        Arguments from different viewpoints are considered and weighed against each other.
+        
+        Reasoning Prompt:
+            Let's analyze this from multiple perspectives, as if different experts were debating the question.
+            Present 2-3 different viewpoints, including any criticisms each might have of the others,
+            then synthesize these perspectives into a balanced conclusion.
+        """
+        return desc
+    
+    def reasoning_step(
+        self, model: str, chat_messages: List[APICompatibleMessage], model_kwargs: dict
+    ) -> List[ModelResponse]:
+        chat_messages.append(
+            {
+                "role": "user",
+                "content": "Let's analyze this from multiple perspectives, as if different experts were debating the question. "
+                "Present 2-3 different viewpoints, including any criticisms each might have of the others, "
+                "then synthesize these perspectives into a balanced conclusion.",
+            }
+        )
+        response = litellm_completion(model, chat_messages, model_kwargs)
+        return [response]
+
+
+class FirstPrinciplesReasoning(ReasonThenFormat):
+    def __init__(self):
+        super().__init__("FirstPrinciplesReasoning")
+    
+    def _get_cost_indicator(self):
+        return 2.5
+    
+    def describe(self):
+        desc = """
+        - FirstPrinciplesReasoning -
+        Breaks down complex problems to their fundamental truths and builds up from there,
+        avoiding assumptions and establishing core principles before proceeding.
+        
+        Reasoning Prompt:
+            Let's break this down to first principles. Identify the fundamental truths or principles that apply
+            to this situation, explain why they're relevant, and then build a solution from these foundations.
+        """
+        return desc
+    
+    def reasoning_step(
+        self, model: str, chat_messages: List[APICompatibleMessage], model_kwargs: dict
+    ) -> List[ModelResponse]:
+        chat_messages.append(
+            {
+                "role": "user",
+                "content": "Let's break this down to first principles. Identify the fundamental truths or principles that apply "
+                "to this situation, explain why they're relevant, and then build a solution from these foundations.",
+            }
+        )
+        response = litellm_completion(model, chat_messages, model_kwargs)
+        return [response]
+
+
+class SequentialStepAnalysis(ReasonThenFormat):
+    def __init__(self, steps=4):
+        super().__init__("SequentialStepAnalysis")
+        self.steps = steps
+    
+    def _get_cost_indicator(self):
+        return 2.0 + 0.5 * self.steps
+    
+    def describe(self):
+        desc = f"""
+        - SequentialStepAnalysis -
+        Performs a multi-stage analysis with {self.steps} distinct, sequential steps, each building on previous findings.
+        Each step is processed separately and the results are compiled into a comprehensive analysis.
+        
+        Reasoning Prompt:
+            Let's analyze this in {self.steps} sequential steps. For each step, provide your analysis before moving to the next step.
+        """
+        return desc
+    
+    def reasoning_step(
+        self, model: str, chat_messages: List[APICompatibleMessage], model_kwargs: dict
+    ) -> List[ModelResponse]:
+        responses = []
+        
+        # Initial step prompt
+        chat_messages.append(
+            {
+                "role": "user",
+                "content": f"Let's analyze this in {self.steps} sequential steps. This is step 1:"
+            }
+        )
+        
+        working_messages = copy.deepcopy(chat_messages)
+        response = litellm_completion(model, working_messages, copy.deepcopy(model_kwargs))
+        responses.append(response)
+        
+        # Sequential steps
+        for step in range(2, self.steps + 1):
+            working_messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            working_messages.append(
+                {"role": "user", "content": f"Now, for step {step}:"}
+            )
+            response = litellm_completion(model, working_messages, copy.deepcopy(model_kwargs))
+            responses.append(response)
+        
+        return responses
+        
+    def aggregate_reasoning_steps(self, responses: List[ModelResponse]) -> str:
+        # Override to format the sequential steps
+        agg_messages = []
+        for i, response in enumerate(responses):
+            agg_messages.append(f"Step {i+1}: {response.choices[0].message.content}")
+        return "\n\n".join(agg_messages)
+
+
+class CounterfactualAnalysis(ReasonThenFormat):
+    def __init__(self):
+        super().__init__("CounterfactualAnalysis")
+    
+    def _get_cost_indicator(self):
+        return 3.0
+    
+    def describe(self):
+        desc = """
+        - CounterfactualAnalysis -
+        Explores alternative scenarios and examines how changes to key variables might affect outcomes.
+        This approach identifies critical dependencies and improves robustness of conclusions.
+        
+        Reasoning Prompt:
+            Let's consider some counterfactuals. What if key assumptions or conditions were different?
+            Identify 2-3 alternative scenarios, explore how outcomes would change, and then use these
+            insights to strengthen your analysis of the actual situation.
+        """
+        return desc
+    
+    def reasoning_step(
+        self, model: str, chat_messages: List[APICompatibleMessage], model_kwargs: dict
+    ) -> List[ModelResponse]:
+        chat_messages.append(
+            {
+                "role": "user",
+                "content": "Let's consider some counterfactuals. What if key assumptions or conditions were different? "
+                "Identify 2-3 alternative scenarios, explore how outcomes would change, and then use these "
+                "insights to strengthen your analysis of the actual situation."
+            }
+        )
+        response = litellm_completion(model, chat_messages, model_kwargs)
+        return [response]
+
+
+class TreeOfThoughts(ReasonThenFormat):
+    def __init__(self, branches=3, depth=2):
+        super().__init__("TreeOfThoughts")
+        self.branches = branches
+        self.depth = depth
+    
+    def _get_cost_indicator(self):
+        # Cost scales with number of branches and depth
+        return 2.0 + self.branches * self.depth
+    
+    def describe(self):
+        desc = f"""
+        - TreeOfThoughts -
+        Expands reasoning into a tree structure with {self.branches} branching paths at each of {self.depth} levels.
+        Different solution approaches are explored in parallel, evaluated, and the best path is selected.
+        
+        Reasoning Prompt:
+            Let's use a tree of thoughts approach with {self.branches} different reasoning paths at each step,
+            exploring to a depth of {self.depth}. For each path, evaluate its promise before deciding which to explore further.
+            Finally, select the most promising complete path to the solution.
+        """
+        return desc
+    
+    def reasoning_step(
+        self, model: str, chat_messages: List[APICompatibleMessage], model_kwargs: dict
+    ) -> List[ModelResponse]:
+        chat_messages.append(
+            {
+                "role": "user",
+                "content": f"Let's use a tree of thoughts approach with {self.branches} different reasoning paths at each step, "
+                f"exploring to a depth of {self.depth}. For each path, evaluate its promise before deciding which to explore further. "
+                "Finally, select the most promising complete path to the solution."
+            }
+        )
+        response = litellm_completion(model, chat_messages, model_kwargs)
+        return [response]
