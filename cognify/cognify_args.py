@@ -11,6 +11,8 @@ class CommonArgs:
     workflow: str
     config: str = None
     log_level: str = "WARNING"
+    rate_limit_port: int = 55555
+    key_env: str = None
 
     def __post_init__(self):
         # Set missing values
@@ -18,6 +20,7 @@ class CommonArgs:
 
     def find_files(self):
         self.search_at_workflow_dir_if_not_set("config", "config.py")
+        self.search_at_workflow_dir_if_not_set("key_env", ".env")
 
     @staticmethod
     def add_cli_args(parser: argparse.ArgumentParser):
@@ -45,6 +48,23 @@ class CommonArgs:
             help="Log level",
             choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
             metavar="log_level",
+        )
+        parser.add_argument(
+            "-p",
+            "--rate_limit_port",
+            type=int,
+            default=CommonArgs.rate_limit_port,
+            help="Port number for rate limit server",
+            metavar="port_number",
+        )
+        parser.add_argument(
+            "-k",
+            "--key_env",
+            type=str,
+            default=CommonArgs.key_env,
+            help="Path to the key env file for API access.\n"
+            "If not provided, will search .env in the same directory as workflow script.",
+            metavar="path_to_key_env",
         )
 
     @classmethod
